@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request
 
-from geometry import ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
+from geometry import ellipsoid_dome, horizontal_ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
 
 app = Flask(__name__)
 
@@ -42,6 +42,17 @@ def _validate_vertical_ellipsoid(v):
     return errors
 
 
+def _validate_horizontal_ellipsoid(v):
+    errors = []
+    if v["major"] <= 0:
+        errors.append("Major radius must be greater than 0.")
+    if v["minor"] <= 0:
+        errors.append("Minor radius must be greater than 0.")
+    elif v["height"] <= 0 or v["height"] >= 2 * v["minor"]:
+        errors.append("Height must be greater than 0 and less than twice the minor radius.")
+    return errors
+
+
 SHAPES = {
     "spherical": {
         "label": "Spherical",
@@ -72,6 +83,16 @@ SHAPES = {
         ],
         "validate": _validate_vertical_ellipsoid,
         "compute": lambda v: vertical_ellipsoid_dome(v["horizontal"], v["vertical"], v["height"]),
+    },
+    "horizontal_ellipsoid": {
+        "label": "Horizontal Ellipsoid",
+        "fields": [
+            ("major", "Major", 25.0),
+            ("minor", "Minor", 16.5),
+            ("height", "Height", 20.0),
+        ],
+        "validate": _validate_horizontal_ellipsoid,
+        "compute": lambda v: horizontal_ellipsoid_dome(v["major"], v["minor"], v["height"]),
     },
 }
 DEFAULT_SHAPE = "spherical"

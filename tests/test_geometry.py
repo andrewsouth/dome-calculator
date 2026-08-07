@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from geometry import ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
+from geometry import ellipsoid_dome, horizontal_ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
 
 
 def _value(rows, label):
@@ -109,4 +109,42 @@ def test_vertical_ellipsoid_matches_ellipsoid_dome_when_floor_at_equator():
         _value(vertical_result["dome"], "Volume"),
         _value(ellipsoid_result["dome"], "Volume"),
         rel_tol=1e-6,
+    )
+
+
+def test_horizontal_ellipsoid_reference_example_from_monolithic_dome_institute():
+    # major=25, minor=16.5, height=20 -- cross-checked against the published
+    # Horizontal Ellipsoid Dome Calculator. That calculator itself only
+    # claims 4-6 significant digits (it also integrates numerically), so a
+    # slightly looser tolerance is used for volume/surface area.
+    result = horizontal_ellipsoid_dome(major=25.0, minor=16.5, height=20.0)
+
+    assert math.isclose(_value(result["floor"], "Major Diameter"), 48.86, rel_tol=1e-3)
+    assert math.isclose(_value(result["floor"], "Minor Diameter"), 32.25, rel_tol=1e-3)
+    assert math.isclose(_value(result["floor"], "Perimeter"), 128.75, rel_tol=1e-3)
+    assert math.isclose(_value(result["floor"], "Area"), 1237.60, rel_tol=1e-3)
+    assert math.isclose(_value(result["floor"], "Foci (±)"), 18.35, rel_tol=1e-3)
+
+    assert math.isclose(_value(result["dome"], "Ellipticity Ratio"), 0.66, rel_tol=1e-2)
+    assert math.isclose(_value(result["dome"], "Surface Distance"), 36.50, rel_tol=1e-3)
+    assert math.isclose(_value(result["dome"], "Surface Area"), 2784.15, rel_tol=1e-3)
+    assert math.isclose(_value(result["dome"], "Volume"), 18722.57, rel_tol=1e-3)
+
+
+def test_horizontal_ellipsoid_hemisphere_matches_spherical_dome():
+    # When major == minor and height == minor (floor at the equator), a
+    # horizontal ellipsoid is just a sphere -- same as the Spherical dome.
+    radius = 20.0
+    horizontal_result = horizontal_ellipsoid_dome(major=radius, minor=radius, height=radius)
+    spherical_result = spherical_dome(diameter=2 * radius, height=radius, stem_wall=0)
+
+    assert math.isclose(
+        _value(horizontal_result["dome"], "Volume"),
+        _value(spherical_result["dome"], "Volume"),
+        rel_tol=1e-3,
+    )
+    assert math.isclose(
+        _value(horizontal_result["dome"], "Surface Area"),
+        _value(spherical_result["dome"], "Surface Area"),
+        rel_tol=1e-3,
     )

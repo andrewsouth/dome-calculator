@@ -133,6 +133,116 @@ def ellipsoid_dome(diameter, height, stem_wall=0.0):
     }
 
 
+def _circular_segment_area(radius, chord_height):
+    """Area of the part of a circle (centered at origin) above z = chord_height."""
+    if radius <= 1e-12:
+        return 0.0
+    if chord_height <= -radius:
+        return math.pi * radius ** 2
+    if chord_height >= radius:
+        return 0.0
+    return radius ** 2 * math.acos(chord_height / radius) - chord_height * math.sqrt(
+        max(radius ** 2 - chord_height ** 2, 0.0)
+    )
+
+
+def _horizontal_ellipsoid_zone(major, minor, z_floor, num_segments=5000):
+    """Volume and lateral surface area of a horizontal ellipsoid dome.
+
+    The ellipsoid (x/major)^2 + (y/minor)^2 + (z/minor)^2 = 1 lies on its
+    side (revolution axis "major" is horizontal), cut by the horizontal
+    floor plane z = z_floor. Because the cut is parallel to the axis of
+    revolution rather than perpendicular to it, each cross-section along x
+    is a circular *segment* rather than a full circle or ellipse, and there
+    is no elementary closed form -- so, like the reference calculator itself
+    (which iterates over 72,000 segments), this integrates numerically along
+    the major axis using exact per-slice circle geometry.
+    """
+    a, b = major, minor
+
+    def radius_at(x):
+        value = 1 - (x / a) ** 2
+        return b * math.sqrt(value) if value > 1e-15 else 0.0
+
+    def radius_slope_at(x):
+        value = 1 - (x / a) ** 2
+        if value <= 1e-15:
+            return 0.0
+        return -b * x / (a ** 2 * math.sqrt(value))
+
+    def volume_integrand(x):
+        return _circular_segment_area(radius_at(x), z_floor)
+
+    def surface_integrand(x):
+        radius = radius_at(x)
+        if radius <= 1e-9:
+            return 0.0
+        if z_floor <= -radius:
+            arc_angle = 2 * math.pi
+        elif z_floor >= radius:
+            return 0.0
+        else:
+            arc_angle = 2 * math.acos(z_floor / radius)
+        return radius * arc_angle * math.hypot(1, radius_slope_at(x))
+
+    if num_segments % 2:
+        num_segments += 1
+    edge_offset = 1e-7  # radius_at(+-a) is exactly 0; nudge inside the domain
+    step = (2 * a - 2 * edge_offset) / num_segments
+    start = -a + edge_offset
+
+    def integrate(f):
+        total = f(start) + f(start + num_segments * step)
+        for i in range(1, num_segments):
+            weight = 4 if i % 2 else 2
+            total += weight * f(start + i * step)
+        return total * step / 3
+
+    return integrate(volume_integrand), integrate(surface_integrand)
+
+
+def horizontal_ellipsoid_dome(major, minor, height):
+    """Geometry for a horizontal ellipsoid dome: elliptical floor, lying on its side.
+
+    `major` (a) is the horizontal semi-axis along the ellipsoid's axis of
+    revolution; `minor` (b) is shared by the other two (vertical and the
+    other horizontal) axes. `height` is measured from the floor to the apex.
+    """
+    a, b = major, minor
+    z_floor = b - height
+
+    scale = math.sqrt(1 - (z_floor / b) ** 2)
+    floor_major = a * scale
+    floor_minor = b * scale
+    floor_area = math.pi * floor_major * floor_minor
+    floor_perimeter = 4 * _ellipsoid_zone_arc_length(floor_major, floor_minor, 0.0, math.pi / 2)
+    foci = math.sqrt(abs(floor_major ** 2 - floor_minor ** 2))
+
+    ellipticity_ratio = b / a
+    theta_floor = math.asin(z_floor / b)
+    surface_distance = _ellipsoid_zone_arc_length(a, b, theta_floor, math.pi / 2)
+    dome_volume, dome_surface_area = _horizontal_ellipsoid_zone(a, b, z_floor)
+
+    return {
+        "floor": [
+            ("Major Diameter", 2 * floor_major, 1),
+            ("Minor Diameter", 2 * floor_minor, 1),
+            ("Perimeter", floor_perimeter, 1),
+            ("Area", floor_area, 2),
+            ("Foci (±)", foci, 1),
+        ],
+        "dome": [
+            ("Major Radius", a, 1),
+            ("Minor Radius", b, 1),
+            ("Overall Height", height, 1),
+            ("Ellipticity Ratio", ellipticity_ratio, 0),
+            ("Surface Distance", surface_distance, 1),
+            ("Surface Area", dome_surface_area, 2),
+            ("Volume", dome_volume, 3),
+        ],
+    }
+
+
 def vertical_ellipsoid_dome(horizontal, vertical, height):
     """Geometry for a vertical ellipsoid dome: circular base, elliptical cross-section.
 
