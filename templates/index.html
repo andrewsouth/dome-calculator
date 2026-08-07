@@ -21,9 +21,17 @@
 </head>
 <body>
   <h1>Dome Calculator</h1>
-  <p class="subtitle">Spherical dome</p>
+  <p class="subtitle">{{ shapes[shape_key].label }} dome</p>
 
   <form method="get" action="/">
+    <div class="field">
+      <label for="shape">Dome Shape</label>
+      <select id="shape" name="shape">
+        {% for key, shape in shapes.items() %}
+          <option value="{{ key }}" {% if key == shape_key %}selected{% endif %}>{{ shape.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="field">
       <label for="diameter">Diameter ({{ values.units }})</label>
       <input type="number" step="any" id="diameter" name="diameter" value="{{ values.diameter }}">
@@ -56,20 +64,30 @@
   {% endif %}
 
   {% if results %}
+    {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
+
     <div class="section-title">Floor</div>
     <table>
-      <tr><td>Radius</td><td class="value">{{ "%.2f"|format(results.radius) }} {{ values.units }}</td></tr>
-      <tr><td>Circumference</td><td class="value">{{ "%.2f"|format(results.circumference) }} {{ values.units }}</td></tr>
-      <tr><td>Area</td><td class="value">{{ "%.2f"|format(results.floor_area) }} {{ values.units }}&sup2;</td></tr>
+      {% for label, value, power in results.floor %}
+        <tr>
+          <td>{{ label }}</td>
+          <td class="value">
+            {{ "%.2f"|format(value) }}{% if power > 0 %} {{ values.units }}{{ unit_suffix(power) }}{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
     </table>
 
     <div class="section-title">Dome</div>
     <table>
-      <tr><td>Radius of Curvature</td><td class="value">{{ "%.2f"|format(results.radius_of_curvature) }} {{ values.units }}</td></tr>
-      <tr><td>Surface Distance</td><td class="value">{{ "%.2f"|format(results.surface_distance) }} {{ values.units }}</td></tr>
-      <tr><td>Surface Area</td><td class="value">{{ "%.2f"|format(results.total_surface_area) }} {{ values.units }}&sup2;</td></tr>
-      <tr><td>Volume</td><td class="value">{{ "%.2f"|format(results.total_volume) }} {{ values.units }}&sup3;</td></tr>
-      <tr><td>Total Height</td><td class="value">{{ "%.2f"|format(results.total_height) }} {{ values.units }}</td></tr>
+      {% for label, value, power in results.dome %}
+        <tr>
+          <td>{{ label }}</td>
+          <td class="value">
+            {{ "%.2f"|format(value) }}{% if power > 0 %} {{ values.units }}{{ unit_suffix(power) }}{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
     </table>
   {% endif %}
 </body>
