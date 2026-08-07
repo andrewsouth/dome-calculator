@@ -3,14 +3,19 @@
 A small Flask web app for calculating the geometry of dome structures —
 inspired by the [Monolithic Dome Institute's calculators](https://monolithicdome.com/calculators).
 
-Currently supports:
+Pick a shape from the dropdown; each has its own inputs and outputs, all
+verified against the reference site's published examples:
 
-- **Spherical dome** — diameter, height, and optional stem wall as inputs;
-  outputs floor radius/circumference/area, dome surface area, volume, and
-  more.
+- **Spherical Dome** — diameter, height, optional stem wall
+- **Ellipsoid Dome** — half-ellipsoid (oblate or prolate), optional stem wall
+- **Vertical Ellipsoid Dome** — circular base, elliptical cross-section;
+  floor can sit above or below the equator
+- **Horizontal Ellipsoid Dome** — elliptical floor plan (ellipsoid lying on
+  its side); volume/surface area have no closed form, so they're computed
+  by numerical integration, same approach the reference calculator uses
+- **Ellipse** — plain 2D ellipse (not a dome): area, circumference, foci
 
-Planned next: Ellipsoid, Vertical Ellipsoid, Horizontal Ellipsoid, Ellipse,
-and the two Dry Bulk Storage calculators, selectable from the same page.
+Planned next: the two Dry Bulk Storage calculators.
 
 ## Running it locally
 

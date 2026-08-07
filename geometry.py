@@ -78,20 +78,20 @@ def spherical_dome(diameter, height, stem_wall=0.0):
     stem_wall_surface_area = 2 * math.pi * radius * stem_wall
     stem_wall_volume = math.pi * radius ** 2 * stem_wall
 
-    return {
-        "floor": [
+    return [
+        ("Floor", [
             ("Radius", radius, 1),
             ("Circumference", circumference, 1),
             ("Area", floor_area, 2),
-        ],
-        "dome": [
+        ]),
+        ("Dome", [
             ("Radius of Curvature", radius_of_curvature, 1),
             ("Surface Distance", surface_distance, 1),
             ("Surface Area", dome_surface_area + stem_wall_surface_area, 2),
             ("Volume", dome_volume + stem_wall_volume, 3),
             ("Total Height", height + stem_wall, 1),
-        ],
-    }
+        ]),
+    ]
 
 
 def ellipsoid_dome(diameter, height, stem_wall=0.0):
@@ -116,21 +116,21 @@ def ellipsoid_dome(diameter, height, stem_wall=0.0):
     stem_wall_surface_area = 2 * math.pi * a * stem_wall
     stem_wall_volume = math.pi * a ** 2 * stem_wall
 
-    return {
-        "floor": [
+    return [
+        ("Floor", [
             ("Radius", a, 1),
             ("Circumference", circumference, 1),
             ("Area", floor_area, 2),
-        ],
-        "dome": [
+        ]),
+        ("Dome", [
             ("Ellipticity Ratio", ellipticity_ratio, 0),
             ("Curvature", curvature, 1),
             ("Surface Distance", surface_distance, 1),
             ("Surface Area", dome_surface_area + stem_wall_surface_area, 2),
             ("Volume", dome_volume + stem_wall_volume, 3),
             ("Total Height", height + stem_wall, 1),
-        ],
-    }
+        ]),
+    ]
 
 
 def _circular_segment_area(radius, chord_height):
@@ -223,15 +223,15 @@ def horizontal_ellipsoid_dome(major, minor, height):
     surface_distance = _ellipsoid_zone_arc_length(a, b, theta_floor, math.pi / 2)
     dome_volume, dome_surface_area = _horizontal_ellipsoid_zone(a, b, z_floor)
 
-    return {
-        "floor": [
+    return [
+        ("Floor Ellipse", [
             ("Major Diameter", 2 * floor_major, 1),
             ("Minor Diameter", 2 * floor_minor, 1),
             ("Perimeter", floor_perimeter, 1),
             ("Area", floor_area, 2),
             ("Foci (±)", foci, 1),
-        ],
-        "dome": [
+        ]),
+        ("Dome", [
             ("Major Radius", a, 1),
             ("Minor Radius", b, 1),
             ("Overall Height", height, 1),
@@ -239,8 +239,8 @@ def horizontal_ellipsoid_dome(major, minor, height):
             ("Surface Distance", surface_distance, 1),
             ("Surface Area", dome_surface_area, 2),
             ("Volume", dome_volume, 3),
-        ],
-    }
+        ]),
+    ]
 
 
 def vertical_ellipsoid_dome(horizontal, vertical, height):
@@ -266,13 +266,13 @@ def vertical_ellipsoid_dome(horizontal, vertical, height):
     dome_surface_area = _ellipsoid_zone_surface_area(a, b, z_floor, z_apex)
     dome_volume = _ellipsoid_zone_volume(a, b, z_floor, z_apex)
 
-    return {
-        "floor": [
+    return [
+        ("Floor", [
             ("Radius", floor_radius, 1),
             ("Circumference", circumference, 1),
             ("Area", floor_area, 2),
-        ],
-        "dome": [
+        ]),
+        ("Dome", [
             ("Horizontal Radius", a, 1),
             ("Vertical Radius", b, 1),
             ("Ellipticity Ratio", ellipticity_ratio, 0),
@@ -281,5 +281,26 @@ def vertical_ellipsoid_dome(horizontal, vertical, height):
             ("Surface Area", dome_surface_area, 2),
             ("Volume", dome_volume, 3),
             ("Overall Height", height, 1),
-        ],
-    }
+        ]),
+    ]
+
+
+def ellipse(major, minor):
+    """Geometry for a plain 2D ellipse (not a dome -- e.g. a floor plan shape)."""
+    a, b = major, minor
+
+    circumference = 4 * _ellipsoid_zone_arc_length(a, b, 0.0, math.pi / 2)
+    area = math.pi * a * b
+    curvature = a ** 2 / b
+    foci = math.sqrt(abs(a ** 2 - b ** 2))
+
+    return [
+        ("Ellipse", [
+            ("Major Radius", a, 1),
+            ("Minor Radius", b, 1),
+            ("Circumference", circumference, 1),
+            ("Curvature", curvature, 1),
+            ("Area", area, 2),
+            ("Foci (±)", foci, 1),
+        ]),
+    ]

@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request
 
-from geometry import ellipsoid_dome, horizontal_ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
+from geometry import ellipse, ellipsoid_dome, horizontal_ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
 
 app = Flask(__name__)
 
@@ -53,9 +53,18 @@ def _validate_horizontal_ellipsoid(v):
     return errors
 
 
+def _validate_ellipse(v):
+    errors = []
+    if v["major"] <= 0:
+        errors.append("Major radius must be greater than 0.")
+    if v["minor"] <= 0:
+        errors.append("Minor radius must be greater than 0.")
+    return errors
+
+
 SHAPES = {
     "spherical": {
-        "label": "Spherical",
+        "label": "Spherical Dome",
         "fields": [
             ("diameter", "Diameter", 105.0),
             ("height", "Height", 35.0),
@@ -65,7 +74,7 @@ SHAPES = {
         "compute": lambda v: spherical_dome(v["diameter"], v["height"], v["stem_wall"]),
     },
     "ellipsoid": {
-        "label": "Ellipsoid",
+        "label": "Ellipsoid Dome",
         "fields": [
             ("diameter", "Diameter", 50.0),
             ("height", "Height", 20.0),
@@ -75,7 +84,7 @@ SHAPES = {
         "compute": lambda v: ellipsoid_dome(v["diameter"], v["height"], v["stem_wall"]),
     },
     "vertical_ellipsoid": {
-        "label": "Vertical Ellipsoid",
+        "label": "Vertical Ellipsoid Dome",
         "fields": [
             ("horizontal", "Horizontal", 25.0),
             ("vertical", "Vertical", 16.5),
@@ -85,7 +94,7 @@ SHAPES = {
         "compute": lambda v: vertical_ellipsoid_dome(v["horizontal"], v["vertical"], v["height"]),
     },
     "horizontal_ellipsoid": {
-        "label": "Horizontal Ellipsoid",
+        "label": "Horizontal Ellipsoid Dome",
         "fields": [
             ("major", "Major", 25.0),
             ("minor", "Minor", 16.5),
@@ -93,6 +102,15 @@ SHAPES = {
         ],
         "validate": _validate_horizontal_ellipsoid,
         "compute": lambda v: horizontal_ellipsoid_dome(v["major"], v["minor"], v["height"]),
+    },
+    "ellipse": {
+        "label": "Ellipse",
+        "fields": [
+            ("major", "Major Radius", 30.0),
+            ("minor", "Minor Radius", 20.0),
+        ],
+        "validate": _validate_ellipse,
+        "compute": lambda v: ellipse(v["major"], v["minor"]),
     },
 }
 DEFAULT_SHAPE = "spherical"

@@ -21,7 +21,7 @@
 </head>
 <body>
   <h1>Dome Calculator</h1>
-  <p class="subtitle">{{ shapes[shape_key].label }} dome</p>
+  <p class="subtitle">{{ shapes[shape_key].label }}</p>
 
   <form method="get" action="/">
     <div class="field">
@@ -60,29 +60,19 @@
   {% if results %}
     {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
 
-    <div class="section-title">Floor</div>
-    <table>
-      {% for label, value, power in results.floor %}
-        <tr>
-          <td>{{ label }}</td>
-          <td class="value">
-            {{ "%.2f"|format(value) }}{% if power > 0 %} {{ values.units }}{{ unit_suffix(power) }}{% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </table>
-
-    <div class="section-title">Dome</div>
-    <table>
-      {% for label, value, power in results.dome %}
-        <tr>
-          <td>{{ label }}</td>
-          <td class="value">
-            {{ "%.2f"|format(value) }}{% if power > 0 %} {{ values.units }}{{ unit_suffix(power) }}{% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </table>
+    {% for section_title, rows in results %}
+      <div class="section-title">{{ section_title }}</div>
+      <table>
+        {% for label, value, power in rows %}
+          <tr>
+            <td>{{ label }}</td>
+            <td class="value">
+              {{ "%.2f"|format(value) }}{% if power > 0 %} {{ values.units }}{{ unit_suffix(power) }}{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endfor %}
   {% endif %}
 </body>
 </html>
