@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dome Calculator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1 { margin-bottom: 0.25rem; }
+    .subtitle { color: #666; margin-top: 0; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin: 1.5rem 0; }
+    .field { display: flex; flex-direction: column; gap: 0.25rem; }
+    label { font-size: 0.85rem; font-weight: 600; }
+    input, select { padding: 0.4rem; font-size: 1rem; width: 8rem; }
+    button { padding: 0.5rem 1.25rem; font-size: 1rem; cursor: pointer; }
+    .errors { background: #fdecea; border: 1px solid #f5c2c0; color: #611a15; padding: 0.75rem 1rem; border-radius: 4px; }
+    table { border-collapse: collapse; margin-top: 1rem; }
+    td { padding: 0.3rem 1rem 0.3rem 0; }
+    td.value { text-align: right; font-variant-numeric: tabular-nums; }
+    .section-title { font-weight: 600; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Dome Calculator</h1>
+  <p class="subtitle">Spherical dome</p>
+
+  <form method="get" action="/">
+    <div class="field">
+      <label for="diameter">Diameter ({{ values.units }})</label>
+      <input type="number" step="any" id="diameter" name="diameter" value="{{ values.diameter }}">
+    </div>
+    <div class="field">
+      <label for="height">Height ({{ values.units }})</label>
+      <input type="number" step="any" id="height" name="height" value="{{ values.height }}">
+    </div>
+    <div class="field">
+      <label for="stem_wall">Stem Wall ({{ values.units }})</label>
+      <input type="number" step="any" id="stem_wall" name="stem_wall" value="{{ values.stem_wall }}">
+    </div>
+    <div class="field">
+      <label for="units">Units</label>
+      <select id="units" name="units">
+        {% for unit in unit_choices %}
+          <option value="{{ unit }}" {% if unit == values.units %}selected{% endif %}>{{ unit }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">Calculate</button>
+  </form>
+
+  {% if errors %}
+    <div class="errors">
+      <ul>
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if results %}
+    <div class="section-title">Floor</div>
+    <table>
+      <tr><td>Radius</td><td class="value">{{ "%.2f"|format(results.radius) }} {{ values.units }}</td></tr>
+      <tr><td>Circumference</td><td class="value">{{ "%.2f"|format(results.circumference) }} {{ values.units }}</td></tr>
+      <tr><td>Area</td><td class="value">{{ "%.2f"|format(results.floor_area) }} {{ values.units }}&sup2;</td></tr>
+    </table>
+
+    <div class="section-title">Dome</div>
+    <table>
+      <tr><td>Radius of Curvature</td><td class="value">{{ "%.2f"|format(results.radius_of_curvature) }} {{ values.units }}</td></tr>
+      <tr><td>Surface Distance</td><td class="value">{{ "%.2f"|format(results.surface_distance) }} {{ values.units }}</td></tr>
+      <tr><td>Surface Area</td><td class="value">{{ "%.2f"|format(results.total_surface_area) }} {{ values.units }}&sup2;</td></tr>
+      <tr><td>Volume</td><td class="value">{{ "%.2f"|format(results.total_volume) }} {{ values.units }}&sup3;</td></tr>
+      <tr><td>Total Height</td><td class="value">{{ "%.2f"|format(results.total_height) }} {{ values.units }}</td></tr>
+    </table>
+  {% endif %}
+</body>
+</html>
