@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from geometry import ellipsoid_dome, spherical_dome
+from geometry import ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
 
 
 def _value(rows, label):
@@ -76,5 +76,37 @@ def test_ellipsoid_reduces_to_sphere_when_axes_equal():
     assert math.isclose(
         _value(ellipsoid_result["dome"], "Volume"),
         _value(sphere_result["dome"], "Volume"),
+        rel_tol=1e-6,
+    )
+
+
+def test_vertical_ellipsoid_reference_example_from_monolithic_dome_institute():
+    # horizontal=25, vertical=16.5, height=20 (floor below the equator) --
+    # cross-checked against the published Vertical Ellipsoid Dome Calculator.
+    result = vertical_ellipsoid_dome(horizontal=25.0, vertical=16.5, height=20.0)
+
+    assert math.isclose(_value(result["floor"], "Radius"), 24.43, rel_tol=1e-3)
+    assert math.isclose(_value(result["dome"], "Ellipticity Ratio"), 1.52, rel_tol=1e-2)
+    assert math.isclose(_value(result["dome"], "Curvature"), 37.88, rel_tol=1e-3)
+    assert math.isclose(_value(result["dome"], "Surface Distance"), 36.50, rel_tol=1e-3)
+    assert math.isclose(_value(result["dome"], "Surface Area"), 3629.56, rel_tol=1e-3)
+    assert math.isclose(_value(result["dome"], "Volume"), 28367.61, rel_tol=1e-3)
+
+
+def test_vertical_ellipsoid_matches_ellipsoid_dome_when_floor_at_equator():
+    # When height == vertical radius, the floor sits exactly at the equator,
+    # which is the same shape as the (horizontal) Ellipsoid dome.
+    horizontal, vertical = 30.0, 18.0
+    vertical_result = vertical_ellipsoid_dome(horizontal=horizontal, vertical=vertical, height=vertical)
+    ellipsoid_result = ellipsoid_dome(diameter=2 * horizontal, height=vertical, stem_wall=0)
+
+    assert math.isclose(
+        _value(vertical_result["dome"], "Surface Area"),
+        _value(ellipsoid_result["dome"], "Surface Area"),
+        rel_tol=1e-6,
+    )
+    assert math.isclose(
+        _value(vertical_result["dome"], "Volume"),
+        _value(ellipsoid_result["dome"], "Volume"),
         rel_tol=1e-6,
     )

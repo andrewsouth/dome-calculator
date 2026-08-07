@@ -32,18 +32,12 @@
         {% endfor %}
       </select>
     </div>
-    <div class="field">
-      <label for="diameter">Diameter ({{ values.units }})</label>
-      <input type="number" step="any" id="diameter" name="diameter" value="{{ values.diameter }}">
-    </div>
-    <div class="field">
-      <label for="height">Height ({{ values.units }})</label>
-      <input type="number" step="any" id="height" name="height" value="{{ values.height }}">
-    </div>
-    <div class="field">
-      <label for="stem_wall">Stem Wall ({{ values.units }})</label>
-      <input type="number" step="any" id="stem_wall" name="stem_wall" value="{{ values.stem_wall }}">
-    </div>
+    {% for key, label, _default in shapes[shape_key].fields %}
+      <div class="field">
+        <label for="{{ key }}">{{ label }} ({{ values.units }})</label>
+        <input type="number" step="any" id="{{ key }}" name="{{ key }}" value="{{ values[key] }}">
+      </div>
+    {% endfor %}
     <div class="field">
       <label for="units">Units</label>
       <select id="units" name="units">

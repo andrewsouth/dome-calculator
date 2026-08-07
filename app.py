@@ -1,23 +1,77 @@
 from flask import Flask, render_template, request
 
-from geometry import ellipsoid_dome, spherical_dome
+from geometry import ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
 
 app = Flask(__name__)
 
 UNIT_CHOICES = ["ft", "in", "m", "mm"]
 
+
+def _validate_spherical(v):
+    errors = []
+    if v["diameter"] <= 0:
+        errors.append("Diameter must be greater than 0.")
+    if v["height"] <= 0:
+        errors.append("Height must be greater than 0.")
+    elif v["height"] > v["diameter"]:
+        errors.append("Height must be no more than the diameter.")
+    if v["stem_wall"] < 0:
+        errors.append("Stem wall height cannot be negative.")
+    return errors
+
+
+def _validate_ellipsoid(v):
+    errors = []
+    if v["diameter"] <= 0:
+        errors.append("Diameter must be greater than 0.")
+    if v["height"] <= 0:
+        errors.append("Height must be greater than 0.")
+    if v["stem_wall"] < 0:
+        errors.append("Stem wall height cannot be negative.")
+    return errors
+
+
+def _validate_vertical_ellipsoid(v):
+    errors = []
+    if v["horizontal"] <= 0:
+        errors.append("Horizontal radius must be greater than 0.")
+    if v["vertical"] <= 0:
+        errors.append("Vertical radius must be greater than 0.")
+    elif v["height"] <= 0 or v["height"] >= 2 * v["vertical"]:
+        errors.append("Height must be greater than 0 and less than twice the vertical radius.")
+    return errors
+
+
 SHAPES = {
     "spherical": {
         "label": "Spherical",
-        "compute": spherical_dome,
-        "max_height": lambda diameter: diameter,  # cap height <= full sphere
-        "defaults": {"diameter": 105.0, "height": 35.0, "stem_wall": 0.0},
+        "fields": [
+            ("diameter", "Diameter", 105.0),
+            ("height", "Height", 35.0),
+            ("stem_wall", "Stem Wall", 0.0),
+        ],
+        "validate": _validate_spherical,
+        "compute": lambda v: spherical_dome(v["diameter"], v["height"], v["stem_wall"]),
     },
     "ellipsoid": {
         "label": "Ellipsoid",
-        "compute": ellipsoid_dome,
-        "max_height": None,  # oblate or prolate, no upper bound tied to diameter
-        "defaults": {"diameter": 50.0, "height": 20.0, "stem_wall": 0.0},
+        "fields": [
+            ("diameter", "Diameter", 50.0),
+            ("height", "Height", 20.0),
+            ("stem_wall", "Stem Wall", 0.0),
+        ],
+        "validate": _validate_ellipsoid,
+        "compute": lambda v: ellipsoid_dome(v["diameter"], v["height"], v["stem_wall"]),
+    },
+    "vertical_ellipsoid": {
+        "label": "Vertical Ellipsoid",
+        "fields": [
+            ("horizontal", "Horizontal", 25.0),
+            ("vertical", "Vertical", 16.5),
+            ("height", "Height", 20.0),
+        ],
+        "validate": _validate_vertical_ellipsoid,
+        "compute": lambda v: vertical_ellipsoid_dome(v["horizontal"], v["vertical"], v["height"]),
     },
 }
 DEFAULT_SHAPE = "spherical"
@@ -32,8 +86,8 @@ def index():
         shape_key = DEFAULT_SHAPE
     shape = SHAPES[shape_key]
 
-    values = dict(shape["defaults"])
-    for key in ("diameter", "height", "stem_wall"):
+    values = {key: default for key, _label, default in shape["fields"]}
+    for key in values:
         raw = request.args.get(key)
         if raw is None:
             continue
@@ -45,18 +99,12 @@ def index():
     units = request.args.get("units", "ft")
     values["units"] = units if units in UNIT_CHOICES else "ft"
 
-    if values["diameter"] <= 0:
-        errors.append("Diameter must be greater than 0.")
-    if values["height"] <= 0:
-        errors.append("Height must be greater than 0.")
-    elif shape["max_height"] is not None and values["height"] > shape["max_height"](values["diameter"]):
-        errors.append("Height must be no more than the diameter.")
-    if values["stem_wall"] < 0:
-        errors.append("Stem wall height cannot be negative.")
+    if not errors:
+        errors = shape["validate"](values)
 
     results = None
     if not errors:
-        results = shape["compute"](values["diameter"], values["height"], values["stem_wall"])
+        results = shape["compute"](values)
 
     return render_template(
         "index.html",
