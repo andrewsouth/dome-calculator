@@ -14,8 +14,18 @@ verified against the reference site's published examples:
   its side); volume/surface area have no closed form, so they're computed
   by numerical integration, same approach the reference calculator uses
 - **Ellipse** — plain 2D ellipse (not a dome): area, circumference, foci
+- **Dry Bulk Storage Calculator** — material (with a given angle of repose
+  and density) poured into a dome; computes how it piles up (partly filling
+  the structure, partly forming a freestanding cone under the dome ceiling)
+  and the resulting storage capacity
+- **Dry Bulk Storage Sizer** — the inverse problem: given a target capacity
+  and one of 5 preset dome "styles" (pile cover, hemisphere, or a hemisphere
+  on a stem wall of a given proportion), solves for the dome size via
+  numerical root-finding
 
-Planned next: the two Dry Bulk Storage calculators.
+All 7 calculators from the reference site are now implemented. Not
+included: the "Dome Price" cost estimate shown on the reference site, since
+that's an opaque business estimate with no disclosed formula.
 
 ## Running it locally
 

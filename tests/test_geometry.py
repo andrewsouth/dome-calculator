@@ -4,7 +4,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from geometry import ellipse, ellipsoid_dome, horizontal_ellipsoid_dome, spherical_dome, vertical_ellipsoid_dome
+from geometry import (
+    dry_bulk_storage_dome,
+    dry_bulk_storage_sizer,
+    ellipse,
+    ellipsoid_dome,
+    horizontal_ellipsoid_dome,
+    spherical_dome,
+    vertical_ellipsoid_dome,
+)
 
 
 def _section(result, title):
@@ -12,6 +20,13 @@ def _section(result, title):
         if section_title == title:
             return rows
     raise KeyError(title)
+
+
+def _section_starting_with(result, prefix):
+    for section_title, rows in result:
+        if section_title.startswith(prefix):
+            return rows
+    raise KeyError(prefix)
 
 
 def _value(rows, label):
@@ -172,3 +187,94 @@ def test_ellipse_circle_matches_known_formulas():
     assert math.isclose(_value(rows, "Circumference"), 2 * math.pi * radius, rel_tol=1e-9)
     assert math.isclose(_value(rows, "Area"), math.pi * radius ** 2, rel_tol=1e-9)
     assert math.isclose(_value(rows, "Foci (±)"), 0.0, abs_tol=1e-9)
+
+
+def test_dry_bulk_calculator_reference_example_from_monolithic_dome_institute():
+    # diameter=116, height=58, stem_wall=36, angle=32, density=50 lbs/ft3 --
+    # cross-checked against the published Dry Bulk Storage Dome Calculator.
+    result = dry_bulk_storage_dome(
+        diameter=116.0, height=58.0, stem_wall=36.0,
+        angle_degrees=32.0, density=50.0, density_unit="lbs/ft3", length_unit="ft",
+    )
+    product = _section(result, "Product")
+    cone = _section_starting_with(result, "Cone @")
+    portion = _section(result, "Portion above cone")
+    frustum = _section(result, "Frustum below cone")
+    total = _section_starting_with(result, "Total:")
+
+    assert math.isclose(_value(product, "Volume"), 724652.76, rel_tol=1e-3)
+    assert math.isclose(_value(product, "Capacity"), 18116.32, rel_tol=1e-3)
+
+    assert math.isclose(_value(cone, "Radius"), 52.13, rel_tol=1e-3)
+    assert math.isclose(_value(cone, "Height"), 32.57, rel_tol=1e-3)
+    assert math.isclose(_value(cone, "Slant Length"), 61.47, rel_tol=1e-3)
+    assert math.isclose(_value(cone, "Lateral Area"), 10067.13, rel_tol=1e-3)
+    assert math.isclose(_value(cone, "Volume"), 92700.57, rel_tol=1e-3)
+
+    assert math.isclose(_value(portion, "Surface Area"), 11870.94, rel_tol=1e-3)
+    assert math.isclose(_value(portion, "Volume"), 157148.86, rel_tol=1e-3)
+    assert math.isclose(_value(portion, "Empty Volume"), 64448.29, rel_tol=1e-3)
+
+    assert math.isclose(_value(frustum, "Surface Area"), 22384.98, rel_tol=1e-3)
+    assert math.isclose(_value(frustum, "Volume"), 631952.20, rel_tol=1e-3)
+    assert math.isclose(_value(frustum, "Capacity"), 15798.80, rel_tol=1e-3)
+
+    assert math.isclose(_value(total, "Volume"), 789101.05, rel_tol=1e-3)
+    assert math.isclose(_value(total, "Surface Area"), 34255.93, rel_tol=1e-3)
+
+
+def test_dry_bulk_calculator_frustum_plus_cone_equals_product_volume():
+    result = dry_bulk_storage_dome(
+        diameter=80.0, height=40.0, stem_wall=20.0,
+        angle_degrees=28.0, density=48.0, density_unit="lbs/ft3", length_unit="ft",
+    )
+    product = _section(result, "Product")
+    cone = _section_starting_with(result, "Cone @")
+    frustum = _section(result, "Frustum below cone")
+
+    assert math.isclose(
+        _value(product, "Volume"), _value(cone, "Volume") + _value(frustum, "Volume"), rel_tol=1e-9
+    )
+
+
+def test_dry_bulk_sizer_reference_example_from_monolithic_dome_institute():
+    # angle=32, density=50 lbs/ft3, capacity=10000 ton, style=short --
+    # cross-checked against the published Dry Bulk Storage Dome Sizer.
+    result = dry_bulk_storage_sizer(
+        capacity=10000.0, weight_unit="ton", density=50.0, density_unit="lbs/ft3",
+        angle_degrees=32.0, style="short", length_unit="ft",
+    )
+    product = _section(result, "Product")
+    floor = _section_starting_with(result, "Floor:")
+    dome = _section_starting_with(result, "Dome:")
+    stem_wall = _section_starting_with(result, "Stem Wall:")
+    total = _section_starting_with(result, "Total:")
+
+    assert math.isclose(_value(product, "Capacity"), 10000.0, rel_tol=1e-6)
+    assert math.isclose(_value(floor, "Radius"), 52.81, rel_tol=1e-3)
+    assert math.isclose(_value(dome, "Radius of Curvature"), 52.81, rel_tol=1e-3)
+    assert math.isclose(_value(stem_wall, "Volume"), 140184.72, rel_tol=1e-3)
+    assert math.isclose(_value(total, "Volume"), 448648.97, rel_tol=1e-3)
+
+
+def test_dry_bulk_sizer_solved_dome_reproduces_target_capacity_in_calculator():
+    # Whatever the Sizer solves for should, fed back into the Calculator,
+    # reproduce the same capacity -- a consistency check between the two.
+    sizer_result = dry_bulk_storage_sizer(
+        capacity=5000.0, weight_unit="ton", density=60.0, density_unit="lbs/ft3",
+        angle_degrees=30.0, style="tall", length_unit="ft",
+    )
+    floor = _section_starting_with(sizer_result, "Floor:")
+    dome = _section_starting_with(sizer_result, "Dome:")
+
+    diameter = 2 * _value(floor, "Radius")
+    height = _value(dome, "Radius of Curvature")  # hemisphere: height == radius
+    stem_wall_height = height  # "tall" style: stem wall == dome height, by definition
+
+    calculator_result = dry_bulk_storage_dome(
+        diameter=diameter, height=height, stem_wall=stem_wall_height,
+        angle_degrees=30.0, density=60.0, density_unit="lbs/ft3", length_unit="ft",
+    )
+    assert math.isclose(
+        _value(_section(calculator_result, "Product"), "Capacity"), 5000.0, rel_tol=1e-3
+    )
