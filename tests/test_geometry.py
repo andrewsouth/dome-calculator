@@ -2,6 +2,8 @@ import math
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from geometry import (
@@ -278,3 +280,49 @@ def test_dry_bulk_sizer_solved_dome_reproduces_target_capacity_in_calculator():
     assert math.isclose(
         _value(_section(calculator_result, "Product"), "Capacity"), 5000.0, rel_tol=1e-3
     )
+
+
+def test_dry_bulk_calculator_freeboard_zero_matches_no_freeboard_default():
+    with_default = dry_bulk_storage_dome(
+        diameter=116.0, height=58.0, stem_wall=36.0,
+        angle_degrees=32.0, density=50.0, density_unit="lbs/ft3", length_unit="ft",
+    )
+    with_explicit_zero = dry_bulk_storage_dome(
+        diameter=116.0, height=58.0, stem_wall=36.0,
+        angle_degrees=32.0, density=50.0, density_unit="lbs/ft3", length_unit="ft", freeboard=0.0,
+    )
+    assert math.isclose(
+        _value(_section(with_default, "Product"), "Volume"),
+        _value(_section(with_explicit_zero, "Product"), "Volume"),
+        rel_tol=1e-9,
+    )
+
+
+def test_dry_bulk_calculator_freeboard_strictly_reduces_capacity():
+    kwargs = dict(diameter=116.0, height=58.0, stem_wall=36.0, angle_degrees=32.0, density=50.0, density_unit="lbs/ft3", length_unit="ft")
+    no_freeboard = dry_bulk_storage_dome(**kwargs, freeboard=0.0)
+    with_freeboard = dry_bulk_storage_dome(**kwargs, freeboard=20.0)
+
+    no_freeboard_volume = _value(_section(no_freeboard, "Product"), "Volume")
+    with_freeboard_volume = _value(_section(with_freeboard, "Product"), "Volume")
+    assert with_freeboard_volume < no_freeboard_volume
+
+    # The pile's peak should now sit exactly `freeboard` below the true apex.
+    cone = _section_starting_with(with_freeboard, "Cone @")
+    assert math.isclose(_value(cone, "Peak Height Above Floor"), 94.0 - 20.0, rel_tol=1e-9)
+
+
+def test_dry_bulk_calculator_too_much_freeboard_raises_helpful_error():
+    with pytest.raises(ValueError):
+        dry_bulk_storage_dome(
+            diameter=116.0, height=58.0, stem_wall=36.0,
+            angle_degrees=32.0, density=50.0, density_unit="lbs/ft3", length_unit="ft", freeboard=94.0,
+        )
+
+
+def test_dry_bulk_sizer_accepts_freeboard_and_still_hits_target_capacity():
+    result = dry_bulk_storage_sizer(
+        capacity=10000.0, weight_unit="ton", density=50.0, density_unit="lbs/ft3",
+        angle_degrees=32.0, style="short", length_unit="ft", freeboard=5.0,
+    )
+    assert math.isclose(_value(_section(result, "Product"), "Capacity"), 10000.0, rel_tol=1e-3)

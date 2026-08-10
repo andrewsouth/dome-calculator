@@ -105,6 +105,8 @@ def _validate_dry_bulk_calculator(v):
         errors.append("Angle of repose must be between 0 and 90 degrees.")
     if v["density"] <= 0:
         errors.append("Density must be greater than 0.")
+    if v["freeboard"] < 0:
+        errors.append("Freeboard cannot be negative.")
     return errors
 
 
@@ -116,6 +118,8 @@ def _validate_dry_bulk_sizer(v):
         errors.append("Density must be greater than 0.")
     if v["capacity"] <= 0:
         errors.append("Capacity must be greater than 0.")
+    if v["freeboard"] < 0:
+        errors.append("Freeboard cannot be negative.")
     return errors
 
 
@@ -178,10 +182,12 @@ SHAPES = {
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
             select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
+            number_field("freeboard", "Freeboard", 0.0),
         ],
         "validate": _validate_dry_bulk_calculator,
         "compute": lambda v: dry_bulk_storage_dome(
-            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["density"], v["density_unit"], v["units"]
+            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["density"], v["density_unit"], v["units"],
+            v["freeboard"],
         ),
     },
     "dry_bulk_sizer": {
@@ -193,10 +199,12 @@ SHAPES = {
             plain_number_field("capacity", "Capacity", 10000.0),
             select_field("weight_unit", "Capacity Unit", "ton", WEIGHT_UNIT_CHOICES),
             select_field("style", "Style", "short", STYLE_CHOICES),
+            number_field("freeboard", "Freeboard", 0.0),
         ],
         "validate": _validate_dry_bulk_sizer,
         "compute": lambda v: dry_bulk_storage_sizer(
-            v["capacity"], v["weight_unit"], v["density"], v["density_unit"], v["angle"], v["style"], v["units"]
+            v["capacity"], v["weight_unit"], v["density"], v["density_unit"], v["angle"], v["style"], v["units"],
+            v["freeboard"],
         ),
     },
 }

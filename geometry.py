@@ -334,30 +334,48 @@ def _cone_geometry(radius, height):
     return slant, lateral_area, volume
 
 
-def _dry_bulk_cone_transition(radius_of_curvature, floor_radius, dome_height, stem_wall, angle):
-    """Where the pile's angle-of-repose line from the apex meets the structure.
+def _dry_bulk_cone_transition(radius_of_curvature, floor_radius, dome_height, stem_wall, angle, apex_height_above_floor):
+    """Where the pile's angle-of-repose line from its peak meets the structure.
 
-    Returns (cone_radius, height_above_floor). The line from the apex, sloped
-    at `angle` from horizontal, generically meets the spherical dome curve
-    again at radius = radius_of_curvature * sin(2*angle) (derived by
-    substituting the line z = H - r*tan(angle) into the sphere equation). If
-    that radius would exceed the floor radius, the line reaches the vertical
-    stem wall first instead.
+    Returns (cone_radius, height_above_floor). With no freeboard, the pile's
+    peak sits exactly at the dome apex (on the sphere itself), so the line
+    z = apex - r*tan(angle) meets the sphere again at the closed-form radius
+    R*sin(2*angle) (one root of the intersection is trivially the apex
+    itself). With freeboard, the peak sits below the apex -- inside the
+    sphere, not on it -- so both quadratic roots are generally meaningful;
+    the smaller positive one is the first wall the line actually reaches.
+    If no such point lies within the dome's radius, the line reaches the
+    vertical stem wall first instead.
     """
-    r_cone = radius_of_curvature * math.sin(2 * angle)
-    if r_cone <= floor_radius:
-        height_above_dome_base = dome_height - r_cone * math.tan(angle)
-        return r_cone, stem_wall + height_above_dome_base
+    dome_center_above_floor = stem_wall + (dome_height - radius_of_curvature)
+    d = apex_height_above_floor - dome_center_above_floor
+    cos_a, sin_a, R = math.cos(angle), math.sin(angle), radius_of_curvature
 
-    height_above_dome_base = dome_height - floor_radius * math.tan(angle)
-    height_above_floor = stem_wall + height_above_dome_base
-    if height_above_floor < 0:
+    a_coef = 1 / cos_a ** 2
+    b_coef = -2 * d * sin_a / cos_a
+    c_coef = d ** 2 - R ** 2
+    discriminant = b_coef ** 2 - 4 * a_coef * c_coef
+
+    candidates = []
+    if discriminant >= 0:
+        sqrt_disc = math.sqrt(discriminant)
+        for root in ((-b_coef - sqrt_disc) / (2 * a_coef), (-b_coef + sqrt_disc) / (2 * a_coef)):
+            if root > 1e-9:
+                candidates.append(root)
+    valid = [r for r in candidates if r <= floor_radius + 1e-9]
+
+    if valid:
+        r_cone = min(valid)
+        return r_cone, apex_height_above_floor - r_cone * math.tan(angle)
+
+    height_at_wall = apex_height_above_floor - floor_radius * math.tan(angle)
+    if height_at_wall < 0:
         raise ValueError(
             "This angle of repose is too shallow for these dimensions -- "
             "the pile would need to extend below the floor. Try a taller "
-            "structure or a steeper angle."
+            "structure, a steeper angle, or less freeboard."
         )
-    return floor_radius, height_above_floor
+    return floor_radius, height_at_wall
 
 
 def _structure_zone(radius, radius_of_curvature, stem_wall, dome_height, h1, h2):
@@ -399,18 +417,26 @@ def _structure_surface_distance(radius_of_curvature, stem_wall, dome_height, h1,
     return distance
 
 
-def _dry_bulk_core(diameter, height, stem_wall, angle_degrees):
+def _dry_bulk_core(diameter, height, stem_wall, angle_degrees, freeboard=0.0):
     """The raw numeric pieces shared by both the display function and the
-    Sizer's root-finder (which only needs product_volume, repeatedly)."""
+    Sizer's root-finder (which only needs product_volume, repeatedly).
+
+    `freeboard` is how far below the dome's actual apex the pile's peak must
+    stay -- a deliberate clearance margin, on top of whatever gap naturally
+    occurs between the cone and the curved ceiling further down.
+    """
     radius = diameter / 2
     angle = math.radians(angle_degrees)
     radius_of_curvature = (radius ** 2 + height ** 2) / (2 * height)
+    total_height = stem_wall + height
+    pile_apex_height = total_height - freeboard
+    if pile_apex_height <= 0:
+        raise ValueError("Freeboard leaves no room for the pile -- reduce it or use a taller structure.")
 
     cone_radius, transition_height = _dry_bulk_cone_transition(
-        radius_of_curvature, radius, height, stem_wall, angle
+        radius_of_curvature, radius, height, stem_wall, angle, pile_apex_height
     )
-    total_height = stem_wall + height
-    cone_height = total_height - transition_height
+    cone_height = pile_apex_height - transition_height
     cone_slant, cone_lateral_area, cone_volume = _cone_geometry(cone_radius, cone_height)
 
     frustum_volume, frustum_area = _structure_zone(radius, radius_of_curvature, stem_wall, height, 0.0, transition_height)
@@ -425,6 +451,7 @@ def _dry_bulk_core(diameter, height, stem_wall, angle_degrees):
         "radius": radius,
         "radius_of_curvature": radius_of_curvature,
         "total_height": total_height,
+        "pile_apex_height": pile_apex_height,
         "cone_radius": cone_radius,
         "cone_height": cone_height,
         "cone_slant": cone_slant,
@@ -451,10 +478,14 @@ def _mass_kg(volume_native, length_unit, density, density_unit):
     return volume_m3 * _density_to_kg_per_m3(density, density_unit)
 
 
-def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, density_unit, length_unit):
+def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, density_unit, length_unit, freeboard=0.0):
     """Storage capacity of material (at a given angle of repose and density)
-    poured into a spherical dome on an optional stem wall."""
-    core = _dry_bulk_core(diameter, height, stem_wall, angle_degrees)
+    poured into a spherical dome on an optional stem wall.
+
+    `freeboard` (default 0, matching the reference calculator) reserves a
+    clearance gap below the dome's apex that the pile's peak may not enter.
+    """
+    core = _dry_bulk_core(diameter, height, stem_wall, angle_degrees, freeboard)
     radius, R = core["radius"], core["radius_of_curvature"]
 
     density_label = "lbs/ft³" if density_unit == "lbs/ft3" else "kg/m³"
@@ -469,6 +500,7 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
     product_rows = [
         ("Angle of Repose", angle_degrees, "°"),
         ("Density", density, density_label),
+        ("Freeboard", freeboard, 1),
         ("Volume", core["product_volume"], 3),
         capacity_row(core["product_volume"]),
     ]
@@ -479,6 +511,7 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
         ("Above Floor", core["transition_height"], 1),
         ("Radius", core["cone_radius"], 1),
         ("Height", core["cone_height"], 1),
+        ("Peak Height Above Floor", core["pile_apex_height"], 1),
         ("Slant Length", core["cone_slant"], 1),
         ("Lateral Area", core["cone_lateral_area"], 2),
         ("Volume", core["cone_volume"], 3),
@@ -573,7 +606,9 @@ def _dry_bulk_target_volume_native(capacity, weight_unit, density, density_unit,
     return volume_m3 / FT3_TO_M3 if length_unit in ("ft", "in") else volume_m3
 
 
-def dry_bulk_storage_sizer(capacity, weight_unit, density, density_unit, angle_degrees, style, length_unit):
+def dry_bulk_storage_sizer(
+    capacity, weight_unit, density, density_unit, angle_degrees, style, length_unit, freeboard=0.0
+):
     """Find the dome (of a given style) needed to store a target capacity.
 
     Reduces to a 1D root-find: for a fixed style, dome height and stem wall
@@ -587,7 +622,12 @@ def dry_bulk_storage_sizer(capacity, weight_unit, density, density_unit, angle_d
 
     def product_volume_for(radius):
         height, stem_wall = _dry_bulk_style_dimensions(style, radius, angle, short_stem_wall)
-        return _dry_bulk_core(2 * radius, height, stem_wall, angle_degrees)["product_volume"]
+        try:
+            return _dry_bulk_core(2 * radius, height, stem_wall, angle_degrees, freeboard)["product_volume"]
+        except ValueError:
+            # Too small to even fit the freeboard clearance -- treat as "no
+            # capacity yet" so the bracket search keeps expanding outward.
+            return 0.0
 
     low, high = 1e-3, 1.0
     for _ in range(200):
@@ -606,4 +646,6 @@ def dry_bulk_storage_sizer(capacity, weight_unit, density, density_unit, angle_d
 
     radius = (low + high) / 2
     height, stem_wall = _dry_bulk_style_dimensions(style, radius, angle, short_stem_wall)
-    return dry_bulk_storage_dome(2 * radius, height, stem_wall, angle_degrees, density, density_unit, length_unit)
+    return dry_bulk_storage_dome(
+        2 * radius, height, stem_wall, angle_degrees, density, density_unit, length_unit, freeboard
+    )
