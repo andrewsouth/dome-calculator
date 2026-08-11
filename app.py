@@ -208,12 +208,34 @@ DEFAULT_SHAPE = "spherical"
 
 @app.route("/")
 def index():
-    errors = []
-
-    shape_key = request.args.get("shape", DEFAULT_SHAPE)
+    shape_key = request.args.get("shape")
     if shape_key not in SHAPES:
-        shape_key = DEFAULT_SHAPE
+        shape_key = None
+
+    units = request.args.get("units")
+    if units not in UNIT_CHOICES:
+        units = None
+
+    if shape_key is None:
+        stage = 1
+    elif units is None:
+        stage = 2
+    else:
+        stage = 3
+
+    if stage < 3:
+        return render_template(
+            "index.html",
+            stage=stage,
+            shape_key=shape_key,
+            units=units,
+            shapes=SHAPES,
+            default_shape=DEFAULT_SHAPE,
+            unit_choices=UNIT_CHOICES,
+        )
+
     shape = SHAPES[shape_key]
+    errors = []
 
     values = {}
     for field in shape["fields"]:
@@ -232,8 +254,7 @@ def index():
                     errors.append(f"'{raw}' is not a valid number for {field['label']}.")
                     values[key] = field["default"]
 
-    units = request.args.get("units", "ft")
-    values["units"] = units if units in UNIT_CHOICES else "ft"
+    values["units"] = units
 
     if not errors:
         errors = shape["validate"](values)
@@ -247,10 +268,13 @@ def index():
 
     return render_template(
         "index.html",
+        stage=stage,
         shape_key=shape_key,
+        units=units,
         shapes=SHAPES,
-        values=values,
+        default_shape=DEFAULT_SHAPE,
         unit_choices=UNIT_CHOICES,
+        values=values,
         results=results,
         errors=errors,
     )

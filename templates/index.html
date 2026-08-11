@@ -18,73 +18,106 @@
     td { padding: 0.3rem 1rem 0.3rem 0; }
     td.value { text-align: right; font-variant-numeric: tabular-nums; }
     .section-title { font-weight: 600; margin-top: 1rem; }
+    .breadcrumb { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 1rem 0; font-size: 0.95rem; }
+    .breadcrumb .step { background: #eee; border-radius: 4px; padding: 0.3rem 0.6rem; }
+    .breadcrumb a { font-size: 0.85rem; color: #555; }
+    .breadcrumb .sep { color: #999; }
   </style>
 </head>
 <body>
   <h1>Dome Calculator</h1>
-  <p class="subtitle">{{ shapes[shape_key].label }}</p>
 
-  <form method="get" action="/">
-    <div class="field">
-      <label for="shape">Dome Shape</label>
-      <select id="shape" name="shape">
-        {% for key, shape in shapes.items() %}
-          <option value="{{ key }}" {% if key == shape_key %}selected{% endif %}>{{ shape.label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    {% for field in shapes[shape_key].fields %}
-      <div class="field">
-        {% if field.kind == "select" %}
-          <label for="{{ field.key }}">{{ field.label }}</label>
-          <select class="wide" id="{{ field.key }}" name="{{ field.key }}">
-            {% for choice_value, choice_label in field.choices %}
-              <option value="{{ choice_value }}" {% if choice_value == values[field.key] %}selected{% endif %}>{{ choice_label }}</option>
-            {% endfor %}
-          </select>
-        {% else %}
-          <label for="{{ field.key }}">
-            {{ field.label }}{% if field.unit == "length" %} ({{ values.units }}){% elif field.unit %} ({{ field.unit }}){% endif %}
-          </label>
-          <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.2f}'.format(values[field.key]) }}">
-        {% endif %}
-      </div>
-    {% endfor %}
-    <div class="field">
-      <label for="units">Units</label>
-      <select id="units" name="units">
-        {% for unit in unit_choices %}
-          <option value="{{ unit }}" {% if unit == values.units %}selected{% endif %}>{{ unit }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <button type="submit">Calculate</button>
-  </form>
-
-  {% if errors %}
-    <div class="errors">
-      <ul>
-        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
-      </ul>
+  {% if stage >= 2 %}
+    <div class="breadcrumb">
+      <span class="step">Dome Shape: {{ shapes[shape_key].label }}</span>
+      <a href="/">(change)</a>
+      {% if stage >= 3 %}
+        <span class="sep">&rsaquo;</span>
+        <span class="step">Units: {{ units }}</span>
+        <a href="/?shape={{ shape_key }}">(change)</a>
+      {% endif %}
     </div>
   {% endif %}
 
-  {% if results %}
-    {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
+  {% if stage == 1 %}
+    <p class="subtitle">Step 1 of 3 &mdash; choose a dome shape</p>
+    <form method="get" action="/">
+      <div class="field">
+        <label for="shape">Dome Shape</label>
+        <select class="wide" id="shape" name="shape">
+          {% for key, shape in shapes.items() %}
+            <option value="{{ key }}" {% if key == default_shape %}selected{% endif %}>{{ shape.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit">Continue</button>
+    </form>
 
-    {% for section_title, rows in results %}
-      <div class="section-title">{{ section_title }}</div>
-      <table>
-        {% for label, value, suffix in rows %}
-          <tr>
-            <td>{{ label }}</td>
-            <td class="value">
-              {{ "{:,.2f}".format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </table>
-    {% endfor %}
+  {% elif stage == 2 %}
+    <p class="subtitle">Step 2 of 3 &mdash; choose units</p>
+    <form method="get" action="/">
+      <input type="hidden" name="shape" value="{{ shape_key }}">
+      <div class="field">
+        <label for="units">Units</label>
+        <select id="units" name="units">
+          {% for unit in unit_choices %}
+            <option value="{{ unit }}" {% if unit == "ft" %}selected{% endif %}>{{ unit }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit">Continue</button>
+    </form>
+
+  {% else %}
+    <p class="subtitle">Step 3 of 3 &mdash; enter dimensions</p>
+    <form method="get" action="/">
+      <input type="hidden" name="shape" value="{{ shape_key }}">
+      <input type="hidden" name="units" value="{{ units }}">
+      {% for field in shapes[shape_key].fields %}
+        <div class="field">
+          {% if field.kind == "select" %}
+            <label for="{{ field.key }}">{{ field.label }}</label>
+            <select class="wide" id="{{ field.key }}" name="{{ field.key }}">
+              {% for choice_value, choice_label in field.choices %}
+                <option value="{{ choice_value }}" {% if choice_value == values[field.key] %}selected{% endif %}>{{ choice_label }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <label for="{{ field.key }}">
+              {{ field.label }}{% if field.unit == "length" %} ({{ values.units }}){% elif field.unit %} ({{ field.unit }}){% endif %}
+            </label>
+            <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.2f}'.format(values[field.key]) }}">
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit">Calculate</button>
+    </form>
+
+    {% if errors %}
+      <div class="errors">
+        <ul>
+          {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if results %}
+      {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
+
+      {% for section_title, rows in results %}
+        <div class="section-title">{{ section_title }}</div>
+        <table>
+          {% for label, value, suffix in rows %}
+            <tr>
+              <td>{{ label }}</td>
+              <td class="value">
+                {{ "{:,.2f}".format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% endfor %}
+    {% endif %}
   {% endif %}
 </body>
 </html>
