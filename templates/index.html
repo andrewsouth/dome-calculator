@@ -22,6 +22,14 @@
     .breadcrumb .step { background: #eee; border-radius: 4px; padding: 0.3rem 0.6rem; }
     .breadcrumb a { font-size: 0.85rem; color: #555; }
     .breadcrumb .sep { color: #999; }
+    .shape-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.5rem 0; }
+    .shape-card {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      width: 130px; padding: 0.75rem; border: 1px solid #ccc; border-radius: 8px;
+      background: #fff; text-decoration: none; color: #222; text-align: center;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .shape-card:hover { border-color: #888; background: #f6f6f6; }
   </style>
 </head>
 <body>
@@ -41,17 +49,14 @@
 
   {% if stage == 1 %}
     <p class="subtitle">Step 1 of 3 &mdash; choose a dome shape</p>
-    <form method="get" action="/">
-      <div class="field">
-        <label for="shape">Dome Shape</label>
-        <select class="wide" id="shape" name="shape">
-          {% for key, shape in shapes.items() %}
-            <option value="{{ key }}" {% if key == default_shape %}selected{% endif %}>{{ shape.label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <button type="submit">Continue</button>
-    </form>
+    <div class="shape-grid">
+      {% for key, shape in shapes.items() %}
+        <a class="shape-card" href="/?shape={{ key }}">
+          {{ shape.icon | safe }}
+          <span>{{ shape.label }}</span>
+        </a>
+      {% endfor %}
+    </div>
 
   {% elif stage == 2 %}
     <p class="subtitle">Step 2 of 3 &mdash; choose units</p>

@@ -29,6 +29,45 @@ def select_field(key, label, default, choices):
     return {"key": key, "label": label, "default": default, "kind": "select", "choices": choices}
 
 
+_ICON_STROKE = 'stroke="#444" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
+
+
+def _dome_icon(dome_ry=20, pile=False, dashed=False):
+    """Ground + stem wall + dome arc, optionally with a piled cone inside."""
+    dash = ' stroke-dasharray="5,4"' if dashed else ""
+    pile_svg = '<path d="M38 65 L50 33 L62 65 Z" fill="#ccc" stroke="#444" stroke-width="2"/>' if pile else ""
+    return f"""<svg viewBox="0 0 100 80" width="64" height="52">
+        <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
+        <path d="M30 65 L30 50 L70 50 L70 65" {_ICON_STROKE}{dash}/>
+        <path d="M30 50 A20 {dome_ry} 0 0 1 70 50" {_ICON_STROKE}{dash}/>
+        {pile_svg}
+    </svg>"""
+
+
+def _vertical_ellipsoid_icon():
+    return f"""<svg viewBox="0 0 100 80" width="64" height="52">
+        <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
+        <ellipse cx="50" cy="42" rx="18" ry="28" {_ICON_STROKE}/>
+        <line x1="24" y1="58" x2="76" y2="58" {_ICON_STROKE}/>
+    </svg>"""
+
+
+def _horizontal_ellipsoid_icon():
+    return f"""<svg viewBox="0 0 100 80" width="64" height="52">
+        <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
+        <ellipse cx="50" cy="38" rx="38" ry="18" {_ICON_STROKE}/>
+        <line x1="14" y1="51" x2="86" y2="51" {_ICON_STROKE}/>
+    </svg>"""
+
+
+def _ellipse_icon():
+    return f"""<svg viewBox="0 0 100 80" width="64" height="52">
+        <ellipse cx="50" cy="40" rx="38" ry="22" {_ICON_STROKE}/>
+        <line x1="10" y1="40" x2="90" y2="40" stroke="#aaa" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <line x1="50" y1="16" x2="50" y2="64" stroke="#aaa" stroke-width="1.5" stroke-dasharray="3,3"/>
+    </svg>"""
+
+
 def _validate_spherical(v):
     errors = []
     if v["diameter"] <= 0:
@@ -121,6 +160,7 @@ def _validate_dry_bulk_sizer(v):
 SHAPES = {
     "spherical": {
         "label": "Spherical Dome",
+        "icon": _dome_icon(dome_ry=20),
         "fields": [
             number_field("diameter", "Diameter", 105.0),
             number_field("height", "Height", 35.0),
@@ -131,6 +171,7 @@ SHAPES = {
     },
     "ellipsoid": {
         "label": "Ellipsoid Dome",
+        "icon": _dome_icon(dome_ry=11),
         "fields": [
             number_field("diameter", "Diameter", 50.0),
             number_field("height", "Height", 20.0),
@@ -141,6 +182,7 @@ SHAPES = {
     },
     "vertical_ellipsoid": {
         "label": "Vertical Ellipsoid Dome",
+        "icon": _vertical_ellipsoid_icon(),
         "fields": [
             number_field("horizontal", "Horizontal", 25.0),
             number_field("vertical", "Vertical", 16.5),
@@ -151,6 +193,7 @@ SHAPES = {
     },
     "horizontal_ellipsoid": {
         "label": "Horizontal Ellipsoid Dome",
+        "icon": _horizontal_ellipsoid_icon(),
         "fields": [
             number_field("major", "Major", 25.0),
             number_field("minor", "Minor", 16.5),
@@ -161,6 +204,7 @@ SHAPES = {
     },
     "ellipse": {
         "label": "Ellipse",
+        "icon": _ellipse_icon(),
         "fields": [
             number_field("major", "Major Radius", 30.0),
             number_field("minor", "Minor Radius", 20.0),
@@ -170,6 +214,7 @@ SHAPES = {
     },
     "dry_bulk_calculator": {
         "label": "Dry Bulk Storage Calculator",
+        "icon": _dome_icon(dome_ry=20, pile=True),
         "fields": [
             number_field("diameter", "Diameter", 116.0),
             number_field("height", "Height", 58.0),
@@ -187,6 +232,7 @@ SHAPES = {
     },
     "dry_bulk_sizer": {
         "label": "Dry Bulk Storage Sizer",
+        "icon": _dome_icon(dome_ry=20, pile=True, dashed=True),
         "fields": [
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
@@ -203,7 +249,6 @@ SHAPES = {
         ),
     },
 }
-DEFAULT_SHAPE = "spherical"
 
 
 @app.route("/")
@@ -230,7 +275,6 @@ def index():
             shape_key=shape_key,
             units=units,
             shapes=SHAPES,
-            default_shape=DEFAULT_SHAPE,
             unit_choices=UNIT_CHOICES,
         )
 
@@ -272,7 +316,6 @@ def index():
         shape_key=shape_key,
         units=units,
         shapes=SHAPES,
-        default_shape=DEFAULT_SHAPE,
         unit_choices=UNIT_CHOICES,
         values=values,
         results=results,
