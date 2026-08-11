@@ -240,11 +240,12 @@ def test_dry_bulk_calculator_frustum_plus_cone_equals_product_volume():
 
 
 def test_dry_bulk_sizer_reference_example_from_monolithic_dome_institute():
-    # angle=32, density=50 lbs/ft3, capacity=10000 ton, style=short --
-    # cross-checked against the published Dry Bulk Storage Dome Sizer.
+    # angle=32, density=50 lbs/ft3, capacity=10000 ton, 16 ft stem wall --
+    # cross-checked against the published Dry Bulk Storage Dome Sizer's
+    # "short" style example, which uses the same fixed 16 ft stem wall.
     result = dry_bulk_storage_sizer(
         capacity=10000.0, weight_unit="ton", density=50.0, density_unit="lbs/ft3",
-        angle_degrees=32.0, style="short", length_unit="ft",
+        angle_degrees=32.0, stem_wall=16.0, length_unit="ft",
     )
     product = _section(result, "Product")
     floor = _section_starting_with(result, "Floor:")
@@ -262,19 +263,19 @@ def test_dry_bulk_sizer_reference_example_from_monolithic_dome_institute():
 def test_dry_bulk_sizer_solved_dome_reproduces_target_capacity_in_calculator():
     # Whatever the Sizer solves for should, fed back into the Calculator,
     # reproduce the same capacity -- a consistency check between the two.
+    stem_wall = 25.0
     sizer_result = dry_bulk_storage_sizer(
         capacity=5000.0, weight_unit="ton", density=60.0, density_unit="lbs/ft3",
-        angle_degrees=30.0, style="tall", length_unit="ft",
+        angle_degrees=30.0, stem_wall=stem_wall, length_unit="ft",
     )
     floor = _section_starting_with(sizer_result, "Floor:")
     dome = _section_starting_with(sizer_result, "Dome:")
 
     diameter = 2 * _value(floor, "Radius")
     height = _value(dome, "Radius of Curvature")  # hemisphere: height == radius
-    stem_wall_height = height  # "tall" style: stem wall == dome height, by definition
 
     calculator_result = dry_bulk_storage_dome(
-        diameter=diameter, height=height, stem_wall=stem_wall_height,
+        diameter=diameter, height=height, stem_wall=stem_wall,
         angle_degrees=30.0, density=60.0, density_unit="lbs/ft3", length_unit="ft",
     )
     assert math.isclose(
@@ -323,6 +324,23 @@ def test_dry_bulk_calculator_too_much_freeboard_raises_helpful_error():
 def test_dry_bulk_sizer_accepts_freeboard_and_still_hits_target_capacity():
     result = dry_bulk_storage_sizer(
         capacity=10000.0, weight_unit="ton", density=50.0, density_unit="lbs/ft3",
-        angle_degrees=32.0, style="short", length_unit="ft", freeboard=5.0,
+        angle_degrees=32.0, stem_wall=16.0, length_unit="ft", freeboard=5.0,
     )
     assert math.isclose(_value(_section(result, "Product"), "Capacity"), 10000.0, rel_tol=1e-3)
+
+
+def test_dry_bulk_calculator_t_per_m3_density_unit():
+    # 1 t/m3 == 1000 kg/m3, so this should match a kg/m3 call scaled by 1000.
+    in_t = dry_bulk_storage_dome(
+        diameter=30.0, height=15.0, stem_wall=5.0,
+        angle_degrees=30.0, density=1.6, density_unit="t/m3", length_unit="m",
+    )
+    in_kg = dry_bulk_storage_dome(
+        diameter=30.0, height=15.0, stem_wall=5.0,
+        angle_degrees=30.0, density=1600.0, density_unit="kg/m3", length_unit="m",
+    )
+    assert math.isclose(
+        _value(_section(in_t, "Product"), "Capacity"),
+        _value(_section(in_kg, "Product"), "Capacity"),
+        rel_tol=1e-9,
+    )

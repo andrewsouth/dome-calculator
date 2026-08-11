@@ -13,15 +13,8 @@ from geometry import (
 app = Flask(__name__)
 
 UNIT_CHOICES = ["ft", "in", "m", "mm"]
-DENSITY_UNIT_CHOICES = [("lbs/ft3", "lbs/ft³"), ("kg/m3", "kg/m³")]
+DENSITY_UNIT_CHOICES = [("lbs/ft3", "lbs/ft³"), ("kg/m3", "kg/m³"), ("t/m3", "t/m³")]
 WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg", "kg"), ("bu", "bu")]
-STYLE_CHOICES = [
-    ("pile", "pile (cover only, no stem wall)"),
-    ("hemi", "hemi (hemisphere, no stem wall)"),
-    ("short", "short (16 ft / 5 m stem wall)"),
-    ("medium", "medium (stem wall = height / 2)"),
-    ("tall", "tall (stem wall = height)"),
-]
 
 
 def number_field(key, label, default):
@@ -118,6 +111,8 @@ def _validate_dry_bulk_sizer(v):
         errors.append("Density must be greater than 0.")
     if v["capacity"] <= 0:
         errors.append("Capacity must be greater than 0.")
+    if v["stem_wall"] < 0:
+        errors.append("Stem wall height cannot be negative.")
     if v["freeboard"] < 0:
         errors.append("Freeboard cannot be negative.")
     return errors
@@ -198,12 +193,12 @@ SHAPES = {
             select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
             plain_number_field("capacity", "Capacity", 10000.0),
             select_field("weight_unit", "Capacity Unit", "ton", WEIGHT_UNIT_CHOICES),
-            select_field("style", "Style", "short", STYLE_CHOICES),
+            number_field("stem_wall", "Stem Wall", 16.0),
             number_field("freeboard", "Freeboard", 0.0),
         ],
         "validate": _validate_dry_bulk_sizer,
         "compute": lambda v: dry_bulk_storage_sizer(
-            v["capacity"], v["weight_unit"], v["density"], v["density_unit"], v["angle"], v["style"], v["units"],
+            v["capacity"], v["weight_unit"], v["density"], v["density_unit"], v["angle"], v["stem_wall"], v["units"],
             v["freeboard"],
         ),
     },
@@ -232,7 +227,7 @@ def index():
                 values[key] = field["default"]
             else:
                 try:
-                    values[key] = float(raw)
+                    values[key] = float(raw.replace(",", ""))
                 except ValueError:
                     errors.append(f"'{raw}' is not a valid number for {field['label']}.")
                     values[key] = field["default"]

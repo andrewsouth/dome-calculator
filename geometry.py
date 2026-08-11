@@ -470,7 +470,11 @@ def _dry_bulk_core(diameter, height, stem_wall, angle_degrees, freeboard=0.0):
 
 
 def _density_to_kg_per_m3(density, density_unit):
-    return density * LB_PER_FT3_TO_KG_PER_M3 if density_unit == "lbs/ft3" else density
+    if density_unit == "lbs/ft3":
+        return density * LB_PER_FT3_TO_KG_PER_M3
+    if density_unit == "t/m3":
+        return density * 1000.0
+    return density
 
 
 def _mass_kg(volume_native, length_unit, density, density_unit):
@@ -488,7 +492,7 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
     core = _dry_bulk_core(diameter, height, stem_wall, angle_degrees, freeboard)
     radius, R = core["radius"], core["radius_of_curvature"]
 
-    density_label = "lbs/ft³" if density_unit == "lbs/ft3" else "kg/m³"
+    density_label = {"lbs/ft3": "lbs/ft³", "kg/m3": "kg/m³", "t/m3": "t/m³"}[density_unit]
     mass_unit_label = "ton" if length_unit in ("ft", "in") else "tonne"
     show_bushels = length_unit in ("ft", "in") and density_unit == "lbs/ft3"
 
@@ -565,31 +569,14 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
 
     return [
         ("Product", product_rows),
-        (f"Cone @ {core['transition_height']:.2f} {length_unit} above floor", cone_rows),
+        (f"Cone @ {core['transition_height']:,.2f} {length_unit} above floor", cone_rows),
         ("Portion above cone", portion_rows),
         ("Frustum below cone", frustum_rows),
-        (f"Floor: {diameter:.2f} {length_unit} diameter", floor_rows),
-        (f"Dome: {height:.2f} {length_unit} height", dome_rows),
-        (f"Stem Wall: {stem_wall:.2f} {length_unit} height", stem_wall_rows),
-        (f"Total: {core['total_height']:.2f} {length_unit} height", total_rows),
+        (f"Floor: {diameter:,.2f} {length_unit} diameter", floor_rows),
+        (f"Dome: {height:,.2f} {length_unit} height", dome_rows),
+        (f"Stem Wall: {stem_wall:,.2f} {length_unit} height", stem_wall_rows),
+        (f"Total: {core['total_height']:,.2f} {length_unit} height", total_rows),
     ]
-
-
-def _dry_bulk_style_dimensions(style, radius, angle, short_stem_wall):
-    if style == "hemi":
-        return radius, 0.0
-    if style == "short":
-        return radius, short_stem_wall
-    if style == "medium":
-        return radius, radius / 2
-    if style == "tall":
-        return radius, radius
-    if style == "pile":
-        # Dome height chosen so the pile's repose line meets the dome curve
-        # exactly at the floor edge -- no frustum, no stem wall, the dome
-        # just clears the pile with no material touching it.
-        return radius * math.tan(angle), 0.0
-    raise ValueError(f"Unknown style: {style}")
 
 
 def _dry_bulk_target_volume_native(capacity, weight_unit, density, density_unit, length_unit):
@@ -607,23 +594,20 @@ def _dry_bulk_target_volume_native(capacity, weight_unit, density, density_unit,
 
 
 def dry_bulk_storage_sizer(
-    capacity, weight_unit, density, density_unit, angle_degrees, style, length_unit, freeboard=0.0
+    capacity, weight_unit, density, density_unit, angle_degrees, stem_wall, length_unit, freeboard=0.0
 ):
-    """Find the dome (of a given style) needed to store a target capacity.
+    """Find the hemisphere dome (on a given stem wall) needed to store a target capacity.
 
-    Reduces to a 1D root-find: for a fixed style, dome height and stem wall
-    are both determined by a single "radius" parameter, so product_volume(radius)
-    is a plain increasing function -- bisect on it, then hand the solved
-    dimensions to dry_bulk_storage_dome for the actual display output.
+    Reduces to a 1D root-find: with stem_wall fixed and dome height always
+    equal to radius (a hemisphere), product_volume(radius) is a plain
+    increasing function of the single remaining size parameter -- bisect on
+    it, then hand the solved diameter to dry_bulk_storage_dome for display.
     """
-    angle = math.radians(angle_degrees)
     target_volume = _dry_bulk_target_volume_native(capacity, weight_unit, density, density_unit, length_unit)
-    short_stem_wall = 5.0 if length_unit in ("m", "mm") else 16.0
 
     def product_volume_for(radius):
-        height, stem_wall = _dry_bulk_style_dimensions(style, radius, angle, short_stem_wall)
         try:
-            return _dry_bulk_core(2 * radius, height, stem_wall, angle_degrees, freeboard)["product_volume"]
+            return _dry_bulk_core(2 * radius, radius, stem_wall, angle_degrees, freeboard)["product_volume"]
         except ValueError:
             # Too small to even fit the freeboard clearance -- treat as "no
             # capacity yet" so the bracket search keeps expanding outward.
@@ -645,7 +629,6 @@ def dry_bulk_storage_sizer(
             high = mid
 
     radius = (low + high) / 2
-    height, stem_wall = _dry_bulk_style_dimensions(style, radius, angle, short_stem_wall)
     return dry_bulk_storage_dome(
-        2 * radius, height, stem_wall, angle_degrees, density, density_unit, length_unit, freeboard
+        2 * radius, radius, stem_wall, angle_degrees, density, density_unit, length_unit, freeboard
     )

@@ -46,7 +46,7 @@
           <label for="{{ field.key }}">
             {{ field.label }}{% if field.unit == "length" %} ({{ values.units }}){% elif field.unit %} ({{ field.unit }}){% endif %}
           </label>
-          <input type="number" step="any" id="{{ field.key }}" name="{{ field.key }}" value="{{ values[field.key] }}">
+          <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.2f}'.format(values[field.key]) }}">
         {% endif %}
       </div>
     {% endfor %}
@@ -79,7 +79,7 @@
           <tr>
             <td>{{ label }}</td>
             <td class="value">
-              {{ "%.2f"|format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
+              {{ "{:,.2f}".format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
             </td>
           </tr>
         {% endfor %}
