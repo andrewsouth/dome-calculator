@@ -368,5 +368,8 @@ def index():
 
 
 if __name__ == "__main__":
-    # Port 5000 is commonly occupied on macOS by the AirPlay Receiver.
-    app.run(debug=True, port=5050)
+    import os
+
+    # Default 5050: port 5000 is commonly occupied on macOS by the AirPlay
+    # Receiver. A PORT env var (e.g. from a preview harness or PaaS) wins.
+    app.run(debug=True, port=int(os.environ.get("PORT", "5050")))

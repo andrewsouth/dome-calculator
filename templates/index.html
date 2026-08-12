@@ -6,6 +6,8 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
     h1 { margin-bottom: 0.25rem; }
+    h1 a { color: inherit; text-decoration: none; }
+    h1 a:hover { text-decoration: underline; }
     .subtitle { color: #666; margin-top: 0; }
     form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin: 1.5rem 0; }
     .field { display: flex; flex-direction: column; gap: 0.25rem; }
@@ -42,7 +44,7 @@
   </style>
 </head>
 <body>
-  <h1>Dome Calculator</h1>
+  <h1><a href="/" title="Back to shape selection">Dome Calculator</a></h1>
 
   {% if stage >= 2 %}
     <div class="breadcrumb">
