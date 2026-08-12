@@ -13,9 +13,9 @@ import math
 
 from geometry import dry_bulk_geometry, solve_dry_bulk_dome_radius
 
-STRUCT = 'stroke="#333" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
-STRUCT_THIN = 'stroke="#333" stroke-width="2.5" fill="none"'
-DASHED = 'stroke="#999" stroke-width="1.5" fill="none" stroke-dasharray="6,5"'
+STRUCT = 'stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"'
+STRUCT_THIN = 'stroke="#333" stroke-width="1.8" fill="none"'
+DASHED = 'stroke="#999" stroke-width="1.2" fill="none" stroke-dasharray="5,4"'
 AXIS = 'stroke="#bbb" stroke-width="1" stroke-dasharray="4,4"'
 PILE = 'fill="#e2e2e2" stroke="#999" stroke-width="1"'
 
@@ -25,7 +25,7 @@ SCALE_CAPTION = "Drawn to scale &mdash; person shown for size reference"
 
 def _mapper(xmin, xmax, ymin, ymax):
     """Fit a world-coordinate box (y up) into pixel space (y down)."""
-    scale = min(600 / (xmax - xmin), 380 / (ymax - ymin))
+    scale = min(300 / (xmax - xmin), 190 / (ymax - ymin))
     width = (xmax - xmin) * scale + 40
     height = (ymax - ymin) * scale + 40
 
