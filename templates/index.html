@@ -30,6 +30,8 @@
       font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
     .shape-card:hover { border-color: #888; background: #f6f6f6; }
+    .diagram { margin: 1rem 0 0; padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
+    .diagram svg { display: block; max-width: 100%; height: auto; }
   </style>
 </head>
 <body>
@@ -75,6 +77,7 @@
 
   {% else %}
     <p class="subtitle">Step 3 of 3 &mdash; enter dimensions</p>
+    <div class="diagram">{{ shapes[shape_key].diagram | safe }}</div>
     <form method="get" action="/">
       <input type="hidden" name="shape" value="{{ shape_key }}">
       <input type="hidden" name="units" value="{{ units }}">
