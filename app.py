@@ -17,6 +17,8 @@ app = Flask(__name__)
 UNIT_CHOICES = ["ft", "in", "m", "mm"]
 DENSITY_UNIT_CHOICES = [("lbs/ft3", "lbs/ft³"), ("kg/m3", "kg/m³"), ("t/m3", "t/m³")]
 WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg", "kg"), ("bu", "bu")]
+# Freeboard default depends on the selected length unit: 1.5 ft or 0.5 m.
+FREEBOARD_DEFAULTS = {"ft": 1.5, "in": 18.0, "m": 0.5, "mm": 500.0}
 
 
 def number_field(key, label, default):
@@ -236,7 +238,7 @@ SHAPES = {
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
             select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
-            number_field("freeboard", "Freeboard", 0.0),
+            number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
         ],
         "validate": _validate_dry_bulk_calculator,
         "compute": lambda v: dry_bulk_storage_dome(
@@ -256,7 +258,7 @@ SHAPES = {
             plain_number_field("capacity", "Capacity", 10000.0),
             select_field("weight_unit", "Capacity Unit", "ton", WEIGHT_UNIT_CHOICES),
             number_field("stem_wall", "Stem Wall", 16.0),
-            number_field("freeboard", "Freeboard", 0.0),
+            number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
         ],
         "validate": _validate_dry_bulk_sizer,
         "compute": lambda v: dry_bulk_storage_sizer(
@@ -305,14 +307,17 @@ def index():
             choices = [choice_value for choice_value, _choice_label in field["choices"]]
             values[key] = raw if raw in choices else field["default"]
         else:
+            default = field["default"]
+            if isinstance(default, dict):
+                default = default[units]
             if raw is None:
-                values[key] = field["default"]
+                values[key] = default
             else:
                 try:
                     values[key] = float(raw.replace(",", ""))
                 except ValueError:
                     errors.append(f"'{raw}' is not a valid number for {field['label']}.")
-                    values[key] = field["default"]
+                    values[key] = default
 
     values["units"] = units
 
