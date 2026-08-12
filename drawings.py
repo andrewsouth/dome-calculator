@@ -104,9 +104,26 @@ def ellipsoid(v):
     return close(body)
 
 
-def _cut_ellipsoid(a, b, height, units):
+def _plan_inset(svg_width, plan_rx, plan_ry):
+    """Small dashed top-view of the floor footprint in the top-right corner --
+    the one thing a side elevation can't show (circular vs elliptical base)."""
+    box_w, box_h = 84, 56
+    s = min(box_w / (2 * plan_rx), box_h / (2 * plan_ry))
+    rx, ry = plan_rx * s, plan_ry * s
+    cx = svg_width - 24 - box_w / 2
+    cy = 14 + box_h / 2
+    return (
+        f'<ellipse cx="{cx:.1f}" cy="{cy:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" '
+        'fill="none" stroke="#999" stroke-width="1.2" stroke-dasharray="4,3"/>'
+        f'<text x="{cx:.1f}" y="{cy + box_h / 2 + 14:.1f}" text-anchor="middle" '
+        'font-size="10" font-family="system-ui, sans-serif" fill="#888">base (plan view)</text>'
+    )
+
+
+def _cut_ellipsoid(a, b, height, units, plan_ratio):
     """Full ellipse (a horizontal, b vertical semi-axis) cut by the floor,
-    with the below-floor remainder dashed. Shared by vertical & horizontal."""
+    with the below-floor remainder dashed. Shared by vertical & horizontal;
+    plan_ratio is the footprint's minor/major axis ratio (1 = circular base)."""
     z_floor = b - height
     center_y = -z_floor  # world y of the ellipse center (floor is y=0)
     floor_half = a * math.sqrt(max(0.0, 1 - (z_floor / b) ** 2))
@@ -125,16 +142,22 @@ def _cut_ellipsoid(a, b, height, units):
         f'<path d="M{x_px(-floor_half)} {y_px(0)} '
         f'A {a * scale:.1f} {b * scale:.1f} 0 {large} 1 {x_px(floor_half)} {y_px(0)}" {STRUCT}/>'
     )
+    body += _plan_inset(width, floor_half, floor_half * plan_ratio)
     body += _person(x_px, y_px, scale, person_x, units)
     return _svg(body, width, height_px)
 
 
 def vertical_ellipsoid(v):
-    return _cut_ellipsoid(v["horizontal"], v["vertical"], v["height"], v["units"])
+    # Vertical axis of revolution: the footprint is a circle.
+    return _cut_ellipsoid(v["horizontal"], v["vertical"], v["height"], v["units"], plan_ratio=1.0)
 
 
 def horizontal_ellipsoid(v):
-    return _cut_ellipsoid(v["major"], v["minor"], v["height"], v["units"])
+    # Horizontal axis of revolution: the footprint is an ellipse whose
+    # minor/major ratio equals minor/major of the ellipsoid itself.
+    return _cut_ellipsoid(
+        v["major"], v["minor"], v["height"], v["units"], plan_ratio=v["minor"] / v["major"]
+    )
 
 
 def ellipse2d(v):
