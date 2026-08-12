@@ -301,6 +301,11 @@ def index():
     shape = SHAPES[shape_key]
     errors = []
 
+    # Fresh arrival from step 2 has only shape+units in the URL; a Calculate
+    # submission carries the field values. Don't show results (or the scaled
+    # drawing) until the user has actually calculated at least once.
+    submitted = any(request.args.get(field["key"]) is not None for field in shape["fields"])
+
     values = {}
     for field in shape["fields"]:
         key = field["key"]
@@ -323,13 +328,13 @@ def index():
 
     values["units"] = units
 
-    if not errors:
+    if submitted and not errors:
         errors = shape["validate"](values)
 
     results = None
     detail_results = None
     drawing = None
-    if not errors:
+    if submitted and not errors:
         try:
             results = shape["compute"](values)
             drawing = shape["draw"](values)
