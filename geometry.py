@@ -492,7 +492,6 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
     core = _dry_bulk_core(diameter, height, stem_wall, angle_degrees, freeboard)
     radius, R = core["radius"], core["radius_of_curvature"]
 
-    density_label = {"lbs/ft3": "lbs/ft³", "kg/m3": "kg/m³", "t/m3": "t/m³"}[density_unit]
     mass_unit_label = "ton" if length_unit in ("ft", "in") else "tonne"
     show_bushels = length_unit in ("ft", "in") and density_unit == "lbs/ft3"
 
@@ -501,10 +500,9 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
         value = mass_kg / US_TON_TO_KG if mass_unit_label == "ton" else mass_kg / 1000.0
         return ("Capacity", value, mass_unit_label)
 
+    # Inputs (angle, density, freeboard) are deliberately not echoed here --
+    # they're visible in the form directly above the results.
     product_rows = [
-        ("Angle of Repose", angle_degrees, "°"),
-        ("Density", density, density_label),
-        ("Freeboard", freeboard, 1),
         ("Volume", core["product_volume"], 3),
         capacity_row(core["product_volume"]),
     ]

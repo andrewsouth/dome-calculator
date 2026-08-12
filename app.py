@@ -228,6 +228,7 @@ SHAPES = {
     },
     "dry_bulk_calculator": {
         "label": "Dry Bulk Storage Calculator",
+        "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_calculator(),
         "draw": drawings.dry_bulk_calculator,
         "icon": _dome_icon(dome_ry=20, pile=True),
@@ -248,6 +249,7 @@ SHAPES = {
     },
     "dry_bulk_sizer": {
         "label": "Dry Bulk Storage Sizer",
+        "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_sizer(),
         "draw": drawings.dry_bulk_sizer,
         "icon": _dome_icon(dome_ry=20, pile=True, dashed=True),
@@ -325,6 +327,7 @@ def index():
         errors = shape["validate"](values)
 
     results = None
+    detail_results = None
     drawing = None
     if not errors:
         try:
@@ -332,6 +335,17 @@ def index():
             drawing = shape["draw"](values)
         except ValueError as error:
             errors.append(str(error))
+        else:
+            detail_prefixes = shape.get("detail_prefixes", [])
+            if detail_prefixes:
+                detail_results = [
+                    (title, rows) for title, rows in results
+                    if any(title.startswith(prefix) for prefix in detail_prefixes)
+                ]
+                results = [
+                    (title, rows) for title, rows in results
+                    if not any(title.startswith(prefix) for prefix in detail_prefixes)
+                ]
 
     return render_template(
         "index.html",
@@ -342,6 +356,7 @@ def index():
         unit_choices=UNIT_CHOICES,
         values=values,
         results=results,
+        detail_results=detail_results,
         drawing=drawing,
         errors=errors,
     )

@@ -35,6 +35,9 @@
     .drawing { margin: 1.5rem 0 0.5rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
     .drawing svg { display: block; }
     .drawing-caption { margin: 0.5rem 0 0; font-size: 0.8rem; color: #888; }
+    .detail-results { margin-top: 1.5rem; }
+    .detail-results summary { cursor: pointer; font-weight: 600; color: #555; padding: 0.4rem 0; }
+    .detail-results summary:hover { color: #222; }
   </style>
 </head>
 <body>
@@ -122,19 +125,30 @@
 
       {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
 
-      {% for section_title, rows in results %}
-        <div class="section-title">{{ section_title }}</div>
-        <table>
-          {% for label, value, suffix in rows %}
-            <tr>
-              <td>{{ label }}</td>
-              <td class="value">
-                {{ "{:,.2f}".format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </table>
-      {% endfor %}
+      {% macro result_sections(sections) %}
+        {% for section_title, rows in sections %}
+          <div class="section-title">{{ section_title }}</div>
+          <table>
+            {% for label, value, suffix in rows %}
+              <tr>
+                <td>{{ label }}</td>
+                <td class="value">
+                  {{ "{:,.2f}".format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% endfor %}
+      {% endmacro %}
+
+      {{ result_sections(results) }}
+
+      {% if detail_results %}
+        <details class="detail-results">
+          <summary>Full engineering breakdown</summary>
+          {{ result_sections(detail_results) }}
+        </details>
+      {% endif %}
     {% endif %}
   {% endif %}
 </body>
