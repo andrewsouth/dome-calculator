@@ -1,9 +1,12 @@
 """To-scale drawings of the calculated structure, rendered after Calculate.
 
-Unlike the schematic input diagrams (diagrams.py), these are drawn from the
-user's actual values with true proportions -- correct dome curvature, real
-stem-wall-to-dome ratio, the actual material pile for the storage
-calculators -- plus a person silhouette for size reference.
+Each shape produces an architectural pair: a section/elevation view and,
+directly below it at the same horizontal scale and centerline, a plan view
+of the footprint -- so the plan's edges line up with the elevation above.
+Drawn from the user's actual values with true proportions, plus a person
+silhouette in the elevation for size reference.
+
+Each draw function returns a list of (title, svg, caption) boxes.
 """
 
 import math
@@ -11,10 +14,13 @@ import math
 from geometry import dry_bulk_geometry, solve_dry_bulk_dome_radius
 
 STRUCT = 'stroke="#333" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
+STRUCT_THIN = 'stroke="#333" stroke-width="2.5" fill="none"'
 DASHED = 'stroke="#999" stroke-width="1.5" fill="none" stroke-dasharray="6,5"'
+AXIS = 'stroke="#bbb" stroke-width="1" stroke-dasharray="4,4"'
 PILE = 'fill="#e2e2e2" stroke="#999" stroke-width="1"'
 
 PERSON_HEIGHT = {"ft": 6.0, "in": 72.0, "m": 1.83, "mm": 1830.0}
+SCALE_CAPTION = "Drawn to scale &mdash; person shown for size reference"
 
 
 def _mapper(xmin, xmax, ymin, ymax):
@@ -57,7 +63,7 @@ def _person(x_px, y_px, scale, x_world, units):
 
 def _ground_shape_frame(half_width, top_height, units):
     """Common mapper setup for shapes that sit on a ground line, leaving room
-    for the person to the right. Returns (scale, X, Y, person_x, svg_closer)."""
+    for the person to the right. Returns (scale, X, Y, svg_closer, width)."""
     person_h = PERSON_HEIGHT[units]
     person_x = half_width + 0.45 * person_h
     xmin, xmax = -half_width, half_width + 0.9 * person_h
@@ -69,61 +75,82 @@ def _ground_shape_frame(half_width, top_height, units):
     def close(body):
         return _svg(ground + body + _person(x_px, y_px, scale, person_x, units), width, height)
 
-    return scale, x_px, y_px, close
+    return scale, x_px, y_px, close, width
+
+
+def _plan_view(scale, x_px, width, solid, outer_dashed=None, inner_dashed=None):
+    """Top view sharing the elevation's horizontal scale and centerline.
+
+    `solid` is the footprint's (rx, ry) world semi-axes; `outer_dashed` marks
+    a wider maximum extent above the floor (e.g. an ellipsoid's equator
+    overhang) and `inner_dashed` a feature inside (e.g. the pile cone base).
+    """
+    extents = [solid] + [e for e in (outer_dashed, inner_dashed) if e]
+    max_ry = max(ry for _rx, ry in extents)
+    height = 2 * max_ry * scale + 40
+    cx, cy = x_px(0), round(height / 2, 1)
+
+    def ellipse(rx, ry, style):
+        return f'<ellipse cx="{cx}" cy="{cy}" rx="{rx * scale:.1f}" ry="{ry * scale:.1f}" {style}/>'
+
+    body = ""
+    if outer_dashed:
+        body += ellipse(*outer_dashed, DASHED)
+    body += ellipse(*solid, STRUCT_THIN)
+    if inner_dashed:
+        body += ellipse(*inner_dashed, DASHED)
+
+    max_rx = max(rx for rx, _ry in extents)
+    body += f'<line x1="{cx - max_rx * scale - 10:.1f}" y1="{cy}" x2="{cx + max_rx * scale + 10:.1f}" y2="{cy}" {AXIS}/>'
+    body += f'<line x1="{cx}" y1="{cy - max_ry * scale - 10:.1f}" x2="{cx}" y2="{cy + max_ry * scale + 10:.1f}" {AXIS}/>'
+    return _svg(body, width, height)
 
 
 def _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px):
     """Stem wall + spherical-cap arc with the true radius of curvature."""
     curvature = (radius ** 2 + dome_height ** 2) / (2 * dome_height)
     large = 1 if dome_height > radius else 0
-    body = (
+    return (
         f'<line x1="{x_px(-radius)}" y1="{y_px(0)}" x2="{x_px(-radius)}" y2="{y_px(stem_wall)}" {STRUCT}/>'
         f'<line x1="{x_px(radius)}" y1="{y_px(0)}" x2="{x_px(radius)}" y2="{y_px(stem_wall)}" {STRUCT}/>'
         f'<path d="M{x_px(-radius)} {y_px(stem_wall)} '
         f'A {curvature * scale:.1f} {curvature * scale:.1f} 0 {large} 1 '
         f'{x_px(radius)} {y_px(stem_wall)}" {STRUCT}/>'
     )
-    return body
+
+
+def _dome_pair(elevation_svg, plan_svg):
+    return [
+        ("Dome Section Elevation View", elevation_svg, SCALE_CAPTION),
+        ("Dome Plan View", plan_svg, None),
+    ]
 
 
 def spherical(v):
     radius, height, wall = v["diameter"] / 2, v["height"], v["stem_wall"]
-    scale, x_px, y_px, close = _ground_shape_frame(radius, wall + height, v["units"])
-    return close(_dome_body(radius, height, wall, scale, x_px, y_px))
+    scale, x_px, y_px, close, width = _ground_shape_frame(radius, wall + height, v["units"])
+    elevation = close(_dome_body(radius, height, wall, scale, x_px, y_px))
+    plan = _plan_view(scale, x_px, width, (radius, radius))
+    return _dome_pair(elevation, plan)
 
 
 def ellipsoid(v):
     radius, height, wall = v["diameter"] / 2, v["height"], v["stem_wall"]
-    scale, x_px, y_px, close = _ground_shape_frame(radius, wall + height, v["units"])
+    scale, x_px, y_px, close, width = _ground_shape_frame(radius, wall + height, v["units"])
     body = (
         f'<line x1="{x_px(-radius)}" y1="{y_px(0)}" x2="{x_px(-radius)}" y2="{y_px(wall)}" {STRUCT}/>'
         f'<line x1="{x_px(radius)}" y1="{y_px(0)}" x2="{x_px(radius)}" y2="{y_px(wall)}" {STRUCT}/>'
         f'<path d="M{x_px(-radius)} {y_px(wall)} '
         f'A {radius * scale:.1f} {height * scale:.1f} 0 0 1 {x_px(radius)} {y_px(wall)}" {STRUCT}/>'
     )
-    return close(body)
+    plan = _plan_view(scale, x_px, width, (radius, radius))
+    return _dome_pair(close(body), plan)
 
 
-def _plan_inset(svg_width, plan_rx, plan_ry):
-    """Small dashed top-view of the floor footprint in the top-right corner --
-    the one thing a side elevation can't show (circular vs elliptical base)."""
-    box_w, box_h = 84, 56
-    s = min(box_w / (2 * plan_rx), box_h / (2 * plan_ry))
-    rx, ry = plan_rx * s, plan_ry * s
-    cx = svg_width - 24 - box_w / 2
-    cy = 14 + box_h / 2
-    return (
-        f'<ellipse cx="{cx:.1f}" cy="{cy:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" '
-        'fill="none" stroke="#999" stroke-width="1.2" stroke-dasharray="4,3"/>'
-        f'<text x="{cx:.1f}" y="{cy + box_h / 2 + 14:.1f}" text-anchor="middle" '
-        'font-size="10" font-family="system-ui, sans-serif" fill="#888">base (plan view)</text>'
-    )
-
-
-def _cut_ellipsoid(a, b, height, units, plan_ratio):
+def _cut_ellipsoid_elevation(a, b, height, units):
     """Full ellipse (a horizontal, b vertical semi-axis) cut by the floor,
-    with the below-floor remainder dashed. Shared by vertical & horizontal;
-    plan_ratio is the footprint's minor/major axis ratio (1 = circular base)."""
+    with the below-floor remainder dashed. Returns the svg plus the frame
+    pieces the aligned plan view needs."""
     z_floor = b - height
     center_y = -z_floor  # world y of the ellipse center (floor is y=0)
     floor_half = a * math.sqrt(max(0.0, 1 - (z_floor / b) ** 2))
@@ -142,22 +169,29 @@ def _cut_ellipsoid(a, b, height, units, plan_ratio):
         f'<path d="M{x_px(-floor_half)} {y_px(0)} '
         f'A {a * scale:.1f} {b * scale:.1f} 0 {large} 1 {x_px(floor_half)} {y_px(0)}" {STRUCT}/>'
     )
-    body += _plan_inset(width, floor_half, floor_half * plan_ratio)
     body += _person(x_px, y_px, scale, person_x, units)
-    return _svg(body, width, height_px)
+    return _svg(body, width, height_px), scale, x_px, width, floor_half
 
 
 def vertical_ellipsoid(v):
-    # Vertical axis of revolution: the footprint is a circle.
-    return _cut_ellipsoid(v["horizontal"], v["vertical"], v["height"], v["units"], plan_ratio=1.0)
+    a, b, height = v["horizontal"], v["vertical"], v["height"]
+    elevation, scale, x_px, width, floor_half = _cut_ellipsoid_elevation(a, b, height, v["units"])
+    # Circular footprint; if the floor sits below the equator, the equator
+    # overhangs it -- shown as a dashed outer circle.
+    outer = (a, a) if a > floor_half * 1.001 else None
+    plan = _plan_view(scale, x_px, width, (floor_half, floor_half), outer_dashed=outer)
+    return _dome_pair(elevation, plan)
 
 
 def horizontal_ellipsoid(v):
-    # Horizontal axis of revolution: the footprint is an ellipse whose
-    # minor/major ratio equals minor/major of the ellipsoid itself.
-    return _cut_ellipsoid(
-        v["major"], v["minor"], v["height"], v["units"], plan_ratio=v["minor"] / v["major"]
-    )
+    a, b, height = v["major"], v["minor"], v["height"]
+    elevation, scale, x_px, width, floor_half = _cut_ellipsoid_elevation(a, b, height, v["units"])
+    # Elliptical footprint with the ellipsoid's own minor/major ratio; the
+    # widest extent (if the floor is below the axis) is the full a x b shadow.
+    floor_minor = floor_half * b / a
+    outer = (a, b) if a > floor_half * 1.001 else None
+    plan = _plan_view(scale, x_px, width, (floor_half, floor_minor), outer_dashed=outer)
+    return _dome_pair(elevation, plan)
 
 
 def ellipse2d(v):
@@ -165,22 +199,21 @@ def ellipse2d(v):
     scale, width, height, x_px, y_px = _mapper(-a, a, -b, b)
     body = (
         f'<ellipse cx="{x_px(0)}" cy="{y_px(0)}" rx="{a * scale:.1f}" ry="{b * scale:.1f}" {STRUCT}/>'
-        f'<line x1="{x_px(-a)}" y1="{y_px(0)}" x2="{x_px(a)}" y2="{y_px(0)}" '
-        'stroke="#bbb" stroke-width="1" stroke-dasharray="4,4"/>'
-        f'<line x1="{x_px(0)}" y1="{y_px(-b)}" x2="{x_px(0)}" y2="{y_px(b)}" '
-        'stroke="#bbb" stroke-width="1" stroke-dasharray="4,4"/>'
+        f'<line x1="{x_px(-a)}" y1="{y_px(0)}" x2="{x_px(a)}" y2="{y_px(0)}" {AXIS}/>'
+        f'<line x1="{x_px(0)}" y1="{y_px(-b)}" x2="{x_px(0)}" y2="{y_px(b)}" {AXIS}/>'
         f'<circle cx="{x_px(0)}" cy="{y_px(0)}" r="3" fill="#333"/>'
     )
-    return _svg(body, width, height)
+    return [("Plan View", _svg(body, width, height), "Drawn to scale")]
 
 
 def _dry_bulk_drawing(diameter, dome_height, stem_wall, angle, freeboard, units):
     core = dry_bulk_geometry(diameter, dome_height, stem_wall, angle, freeboard)
     radius, curvature = core["radius"], core["radius_of_curvature"]
     transition, peak = core["transition_height"], core["pile_apex_height"]
+    cone_radius = core["cone_radius"]
     total = stem_wall + dome_height
 
-    scale, x_px, y_px, close = _ground_shape_frame(radius, total, units)
+    scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
 
     # Pile outline: up the wall (and along the dome curve if the pile reaches
     # past the stem wall) to the transition point, to the peak, mirrored down.
@@ -200,7 +233,13 @@ def _dry_bulk_drawing(diameter, dome_height, stem_wall, angle, freeboard, units)
 
     body = f'<polygon points="{point_str}" {PILE}/>'
     body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
-    return close(body)
+    elevation = close(body)
+
+    # Plan: floor circle with the pile cone's base circle dashed inside.
+    plan = _plan_view(
+        scale, x_px, width, (radius, radius), inner_dashed=(cone_radius, cone_radius)
+    )
+    return _dome_pair(elevation, plan)
 
 
 def dry_bulk_calculator(v):

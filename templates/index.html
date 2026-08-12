@@ -35,8 +35,9 @@
     .shape-card.small { width: 110px; padding: 0.5rem; font-size: 0.75rem; gap: 0.3rem; }
     .diagram { margin: 1rem 0 0; padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
     .diagram svg { display: block; max-width: 100%; height: auto; }
-    .drawing { margin: 1.5rem 0 0.5rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
+    .drawing { margin: 1.5rem 0 0.5rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: block; width: fit-content; }
     .drawing svg { display: block; }
+    .drawing-title { font-weight: 600; color: #444; margin-bottom: 0.5rem; }
     .drawing-caption { margin: 0.5rem 0 0; font-size: 0.8rem; color: #888; }
     .detail-results { margin-top: 1.5rem; }
     .detail-results summary { cursor: pointer; font-weight: 600; color: #555; padding: 0.4rem 0; }
@@ -123,10 +124,13 @@
 
     {% if results %}
       {% if drawing %}
-        <div class="drawing">
-          {{ drawing | safe }}
-          <p class="drawing-caption">Drawn to scale &mdash; person shown for size reference</p>
-        </div>
+        {% for box_title, box_svg, box_caption in drawing %}
+          <div class="drawing">
+            <div class="drawing-title">{{ box_title }}</div>
+            {{ box_svg | safe }}
+            {% if box_caption %}<p class="drawing-caption">{{ box_caption | safe }}</p>{% endif %}
+          </div>
+        {% endfor %}
       {% endif %}
 
       {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
