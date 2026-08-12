@@ -41,11 +41,14 @@ def _dome_icon(dome_ry=20, stem_wall=False, pile=False, dashed=False):
     product pile filling against the walls at a ~30 degree angle of repose."""
     dash = ' stroke-dasharray="5,4"' if dashed else ""
     base_y = 50 if stem_wall else 65
-    # Pile: bears on the ground, against both stem walls up to the dome
-    # springline, then slopes to a center peak at 30 degrees each side
-    # (rise = 20 * tan(30) ~= 11.5 over the 20-unit half-width).
+    # Pile with no freeboard: fills against the stem walls and up the dome
+    # wall, peaking at the apex. A 30-degree repose line from the apex
+    # (50,30) meets the r=20 shell at (50 +- 17.3, 40), so the outline runs
+    # up the wall, along the dome arc to that contact point, then straight
+    # to the peak (slope 10/17.3 = 30 degrees each side).
     pile_svg = (
-        '<polygon points="30,65 30,50 50,38.5 70,50 70,65" '
+        '<path d="M30 65 L30 50 A20 20 0 0 1 32.7 40 L50 30 L67.3 40 '
+        'A20 20 0 0 1 70 50 L70 65 Z" '
         'fill="#ccc" stroke="#444" stroke-width="2" stroke-linejoin="round"/>'
         if pile else ""
     )
@@ -64,7 +67,7 @@ def _dome_icon(dome_ry=20, stem_wall=False, pile=False, dashed=False):
 
 def _vertical_ellipsoid_icon():
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
-        <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
+        <line x1="8" y1="74" x2="92" y2="74" {_ICON_STROKE}/>
         <ellipse cx="50" cy="42" rx="18" ry="28" {_ICON_STROKE}/>
         <line x1="14" y1="58" x2="86" y2="58" {_ICON_STROKE}/>
     </svg>"""
