@@ -36,15 +36,29 @@ def select_field(key, label, default, choices):
 _ICON_STROKE = 'stroke="#444" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 
 
-def _dome_icon(dome_ry=20, pile=False, dashed=False):
-    """Ground + stem wall + dome arc, optionally with a piled cone inside."""
+def _dome_icon(dome_ry=20, stem_wall=False, pile=False, dashed=False):
+    """Ground line + dome arc; optional stem wall, dashed outline, and a
+    product pile filling against the walls at a ~30 degree angle of repose."""
     dash = ' stroke-dasharray="5,4"' if dashed else ""
-    pile_svg = '<path d="M38 65 L50 33 L62 65 Z" fill="#ccc" stroke="#444" stroke-width="2"/>' if pile else ""
+    base_y = 50 if stem_wall else 65
+    # Pile: bears on the ground, against both stem walls up to the dome
+    # springline, then slopes to a center peak at 30 degrees each side
+    # (rise = 20 * tan(30) ~= 11.5 over the 20-unit half-width).
+    pile_svg = (
+        '<polygon points="30,65 30,50 50,38.5 70,50 70,65" '
+        'fill="#ccc" stroke="#444" stroke-width="2" stroke-linejoin="round"/>'
+        if pile else ""
+    )
+    walls_svg = (
+        f'<path d="M30 65 L30 50" {_ICON_STROKE}{dash}/>'
+        f'<path d="M70 65 L70 50" {_ICON_STROKE}{dash}/>'
+        if stem_wall else ""
+    )
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
         <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
-        <path d="M30 65 L30 50 L70 50 L70 65" {_ICON_STROKE}{dash}/>
-        <path d="M30 50 A20 {dome_ry} 0 0 1 70 50" {_ICON_STROKE}{dash}/>
         {pile_svg}
+        {walls_svg}
+        <path d="M30 {base_y} A20 {dome_ry} 0 0 1 70 {base_y}" {_ICON_STROKE}{dash}/>
     </svg>"""
 
 
@@ -52,7 +66,7 @@ def _vertical_ellipsoid_icon():
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
         <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
         <ellipse cx="50" cy="42" rx="18" ry="28" {_ICON_STROKE}/>
-        <line x1="24" y1="58" x2="76" y2="58" {_ICON_STROKE}/>
+        <line x1="14" y1="58" x2="86" y2="58" {_ICON_STROKE}/>
     </svg>"""
 
 
@@ -163,10 +177,10 @@ def _validate_dry_bulk_sizer(v):
 
 SHAPES = {
     "spherical": {
-        "label": "Spherical Dome",
+        "label": "Spherical Section",
         "diagram": diagrams.spherical(),
         "draw": drawings.spherical,
-        "icon": _dome_icon(dome_ry=20),
+        "icon": _dome_icon(dome_ry=20),  # half sphere on the ground, no stem wall
         "fields": [
             number_field("diameter", "Diameter", 105.0),
             number_field("height", "Height", 35.0),
@@ -176,7 +190,7 @@ SHAPES = {
         "compute": lambda v: spherical_dome(v["diameter"], v["height"], v["stem_wall"]),
     },
     "ellipsoid": {
-        "label": "Ellipsoid Dome",
+        "label": "Ellipsoid",
         "diagram": diagrams.ellipsoid(),
         "draw": drawings.ellipsoid,
         "icon": _dome_icon(dome_ry=11),
@@ -189,7 +203,7 @@ SHAPES = {
         "compute": lambda v: ellipsoid_dome(v["diameter"], v["height"], v["stem_wall"]),
     },
     "vertical_ellipsoid": {
-        "label": "Vertical Ellipsoid Dome",
+        "label": "Vertical Ellipse",
         "diagram": diagrams.vertical_ellipsoid(),
         "draw": drawings.vertical_ellipsoid,
         "icon": _vertical_ellipsoid_icon(),
@@ -202,7 +216,7 @@ SHAPES = {
         "compute": lambda v: vertical_ellipsoid_dome(v["horizontal"], v["vertical"], v["height"]),
     },
     "horizontal_ellipsoid": {
-        "label": "Horizontal Ellipsoid Dome",
+        "label": "Horizontal Ellipse",
         "diagram": diagrams.horizontal_ellipsoid(),
         "draw": drawings.horizontal_ellipsoid,
         "icon": _horizontal_ellipsoid_icon(),
@@ -227,11 +241,11 @@ SHAPES = {
         "compute": lambda v: ellipse(v["major"], v["minor"]),
     },
     "dry_bulk_calculator": {
-        "label": "Dry Bulk Storage Calculator",
+        "label": "Bulk Storage Calculator",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_calculator(),
         "draw": drawings.dry_bulk_calculator,
-        "icon": _dome_icon(dome_ry=20, pile=True),
+        "icon": _dome_icon(dome_ry=20, stem_wall=True, pile=True),
         "fields": [
             number_field("diameter", "Diameter", 116.0),
             number_field("height", "Height", 58.0),
@@ -248,11 +262,11 @@ SHAPES = {
         ),
     },
     "dry_bulk_sizer": {
-        "label": "Dry Bulk Storage Sizer",
+        "label": "Bulk Product Storage Sizer",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_sizer(),
         "draw": drawings.dry_bulk_sizer,
-        "icon": _dome_icon(dome_ry=20, pile=True, dashed=True),
+        "icon": _dome_icon(dome_ry=20, stem_wall=True, pile=True, dashed=True),
         "fields": [
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
