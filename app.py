@@ -184,6 +184,7 @@ SHAPES = {
         "diagram": diagrams.spherical(),
         "draw": drawings.spherical,
         "icon": _dome_icon(dome_ry=20),  # half sphere on the ground, no stem wall
+        "icon_small": _dome_icon(dome_ry=20),
         "fields": [
             number_field("diameter", "Diameter", 105.0),
             number_field("height", "Height", 35.0),
@@ -249,6 +250,7 @@ SHAPES = {
         "diagram": diagrams.dry_bulk_calculator(),
         "draw": drawings.dry_bulk_calculator,
         "icon": _dome_icon(dome_ry=20, stem_wall=True, pile=True),
+        "icon_small": _dome_icon(dome_ry=20),
         "fields": [
             number_field("diameter", "Diameter", 116.0),
             number_field("height", "Height", 58.0),
@@ -270,6 +272,7 @@ SHAPES = {
         "diagram": diagrams.dry_bulk_sizer(),
         "draw": drawings.dry_bulk_sizer,
         "icon": _dome_icon(dome_ry=20, stem_wall=True, pile=True, dashed=True),
+        "icon_small": _dome_icon(dome_ry=20),
         "fields": [
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
@@ -286,6 +289,11 @@ SHAPES = {
         ),
     },
 }
+
+# The small breadcrumb card (steps 2-3) shows a simplified icon where one is
+# set: the spherical-cap shapes reduce to a plain half-sphere section.
+for _shape_config in SHAPES.values():
+    _shape_config.setdefault("icon_small", _shape_config["icon"])
 
 
 @app.route("/")
