@@ -32,6 +32,9 @@
     .shape-card:hover { border-color: #888; background: #f6f6f6; }
     .diagram { margin: 1rem 0 0; padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
     .diagram svg { display: block; max-width: 100%; height: auto; }
+    .drawing { margin: 1.5rem 0 0.5rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
+    .drawing svg { display: block; }
+    .drawing-caption { margin: 0.5rem 0 0; font-size: 0.8rem; color: #888; }
   </style>
 </head>
 <body>
@@ -110,6 +113,13 @@
     {% endif %}
 
     {% if results %}
+      {% if drawing %}
+        <div class="drawing">
+          {{ drawing | safe }}
+          <p class="drawing-caption">Drawn to scale &mdash; person shown for size reference</p>
+        </div>
+      {% endif %}
+
       {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
 
       {% for section_title, rows in results %}

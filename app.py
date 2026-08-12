@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 
 import diagrams
+import drawings
 from geometry import (
     dry_bulk_storage_dome,
     dry_bulk_storage_sizer,
@@ -162,6 +163,7 @@ SHAPES = {
     "spherical": {
         "label": "Spherical Dome",
         "diagram": diagrams.spherical(),
+        "draw": drawings.spherical,
         "icon": _dome_icon(dome_ry=20),
         "fields": [
             number_field("diameter", "Diameter", 105.0),
@@ -174,6 +176,7 @@ SHAPES = {
     "ellipsoid": {
         "label": "Ellipsoid Dome",
         "diagram": diagrams.ellipsoid(),
+        "draw": drawings.ellipsoid,
         "icon": _dome_icon(dome_ry=11),
         "fields": [
             number_field("diameter", "Diameter", 50.0),
@@ -186,6 +189,7 @@ SHAPES = {
     "vertical_ellipsoid": {
         "label": "Vertical Ellipsoid Dome",
         "diagram": diagrams.vertical_ellipsoid(),
+        "draw": drawings.vertical_ellipsoid,
         "icon": _vertical_ellipsoid_icon(),
         "fields": [
             number_field("horizontal", "Horizontal", 25.0),
@@ -198,6 +202,7 @@ SHAPES = {
     "horizontal_ellipsoid": {
         "label": "Horizontal Ellipsoid Dome",
         "diagram": diagrams.horizontal_ellipsoid(),
+        "draw": drawings.horizontal_ellipsoid,
         "icon": _horizontal_ellipsoid_icon(),
         "fields": [
             number_field("major", "Major", 25.0),
@@ -210,6 +215,7 @@ SHAPES = {
     "ellipse": {
         "label": "Ellipse",
         "diagram": diagrams.ellipse2d(),
+        "draw": drawings.ellipse2d,
         "icon": _ellipse_icon(),
         "fields": [
             number_field("major", "Major Radius", 30.0),
@@ -221,6 +227,7 @@ SHAPES = {
     "dry_bulk_calculator": {
         "label": "Dry Bulk Storage Calculator",
         "diagram": diagrams.dry_bulk_calculator(),
+        "draw": drawings.dry_bulk_calculator,
         "icon": _dome_icon(dome_ry=20, pile=True),
         "fields": [
             number_field("diameter", "Diameter", 116.0),
@@ -240,6 +247,7 @@ SHAPES = {
     "dry_bulk_sizer": {
         "label": "Dry Bulk Storage Sizer",
         "diagram": diagrams.dry_bulk_sizer(),
+        "draw": drawings.dry_bulk_sizer,
         "icon": _dome_icon(dome_ry=20, pile=True, dashed=True),
         "fields": [
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
@@ -312,9 +320,11 @@ def index():
         errors = shape["validate"](values)
 
     results = None
+    drawing = None
     if not errors:
         try:
             results = shape["compute"](values)
+            drawing = shape["draw"](values)
         except ValueError as error:
             errors.append(str(error))
 
@@ -327,6 +337,7 @@ def index():
         unit_choices=UNIT_CHOICES,
         values=values,
         results=results,
+        drawing=drawing,
         errors=errors,
     )
 

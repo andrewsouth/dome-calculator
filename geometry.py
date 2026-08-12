@@ -593,15 +593,14 @@ def _dry_bulk_target_volume_native(capacity, weight_unit, density, density_unit,
     return volume_m3 / FT3_TO_M3 if length_unit in ("ft", "in") else volume_m3
 
 
-def dry_bulk_storage_sizer(
+def solve_dry_bulk_dome_radius(
     capacity, weight_unit, density, density_unit, angle_degrees, stem_wall, length_unit, freeboard=0.0
 ):
-    """Find the hemisphere dome (on a given stem wall) needed to store a target capacity.
+    """Bisect for the hemisphere-dome radius that stores the target capacity.
 
-    Reduces to a 1D root-find: with stem_wall fixed and dome height always
-    equal to radius (a hemisphere), product_volume(radius) is a plain
-    increasing function of the single remaining size parameter -- bisect on
-    it, then hand the solved diameter to dry_bulk_storage_dome for display.
+    With stem_wall fixed and dome height always equal to radius (a
+    hemisphere), product_volume(radius) is a plain increasing function of
+    the single remaining size parameter.
     """
     target_volume = _dry_bulk_target_volume_native(capacity, weight_unit, density, density_unit, length_unit)
 
@@ -628,7 +627,21 @@ def dry_bulk_storage_sizer(
         else:
             high = mid
 
-    radius = (low + high) / 2
+    return (low + high) / 2
+
+
+def dry_bulk_geometry(diameter, height, stem_wall, angle_degrees, freeboard=0.0):
+    """Public accessor for the raw dry-bulk numbers (used by the scaled drawing)."""
+    return _dry_bulk_core(diameter, height, stem_wall, angle_degrees, freeboard)
+
+
+def dry_bulk_storage_sizer(
+    capacity, weight_unit, density, density_unit, angle_degrees, stem_wall, length_unit, freeboard=0.0
+):
+    """Find the hemisphere dome (on a given stem wall) needed to store a target capacity."""
+    radius = solve_dry_bulk_dome_radius(
+        capacity, weight_unit, density, density_unit, angle_degrees, stem_wall, length_unit, freeboard
+    )
     return dry_bulk_storage_dome(
         2 * radius, radius, stem_wall, angle_degrees, density, density_unit, length_unit, freeboard
     )
