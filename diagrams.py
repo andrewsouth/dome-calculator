@@ -8,7 +8,7 @@ dimension annotations in blue, reference/extension lines dashed light gray.
 STRUCT = 'stroke="#333" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 DIM = 'stroke="#0b72b9" stroke-width="1.5" fill="none"'
 EXT = 'stroke="#aaa" stroke-width="1" stroke-dasharray="4,3"'
-TEXT = 'font-size="12" font-family="system-ui, sans-serif" fill="#0b72b9"'
+TEXT = 'font-size="16" font-family="system-ui, sans-serif" fill="#0b72b9"'
 
 ARROW_DEFS = (
     '<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" '
@@ -16,7 +16,7 @@ ARROW_DEFS = (
 )
 
 
-def _svg(body, width=320, view_h=205):
+def _svg(body, width=170, view_h=205):
     return f'<svg viewBox="0 0 300 {view_h}" width="{width}">{ARROW_DEFS}{body}</svg>'
 
 
@@ -159,10 +159,10 @@ def dry_bulk_sizer():
         f'<path d="M60 120 A 94.81 94.81 0 0 1 240 120" {STRUCT} stroke-dasharray="6,5"/>'
     )
     body += _pile_with_angle_and_freeboard()
-    body += f'<text x="150" y="140" text-anchor="middle" font-size="12" font-family="system-ui, sans-serif" fill="#555">Capacity</text>'
+    body += f'<text x="150" y="140" text-anchor="middle" font-size="15" font-family="system-ui, sans-serif" fill="#555">Capacity</text>'
     body += _vdim(43, 120, 160, "Stem Wall", side=-1)
     body += (
-        f'<text x="150" y="196" text-anchor="middle" font-size="11" font-family="system-ui, sans-serif" '
+        f'<text x="150" y="196" text-anchor="middle" font-size="13" font-family="system-ui, sans-serif" '
         f'fill="#888">dome size is calculated from capacity</text>'
     )
     return _svg(body)
