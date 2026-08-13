@@ -70,7 +70,8 @@ def _dome_diagram(arc_path, apex_y):
 
 
 def spherical():
-    return _dome_diagram("M60 120 A 94.81 94.81 0 0 1 240 120", apex_y=55)
+    # Hemisphere (r=90 on the 60..240 base), matching the shape card.
+    return _dome_diagram(HEMI_ARC, apex_y=30)
 
 
 def ellipsoid():
