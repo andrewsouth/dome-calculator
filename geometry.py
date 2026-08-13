@@ -643,3 +643,143 @@ def dry_bulk_storage_sizer(
     return dry_bulk_storage_dome(
         2 * radius, radius, stem_wall, angle_degrees, density, density_unit, length_unit, freeboard
     )
+
+
+# -- Live vs dead storage (reclaim geometry). Gravity discharge through
+# hopper openings in the floor develops a funnel-flow channel whose walls
+# rise from each opening's edge at the drawdown angle. Material inside a
+# channel (capped by the stored product's top surface) flows out on its own:
+# that's LIVE storage. Everything outside every channel is DEAD -- it stays
+# put until reclaimed mechanically. Openings are axis-aligned rectangles
+# (cx, cy, width, length); the live surface uses the distance to the NEAREST
+# opening, so multiple inline hoppers or grids of tunnels work unchanged.
+
+
+def _distance_to_opening(x, y, opening):
+    cx, cy, width, length = opening
+    dx = max(abs(x - cx) - width / 2, 0.0)
+    dy = max(abs(y - cy) - length / 2, 0.0)
+    return math.hypot(dx, dy)
+
+
+def _product_surface_height(r, core, stem_wall, dome_height):
+    """Top of the stored product at plan radius r: the repose cone inside the
+    cone-contact radius, the shell itself outside it."""
+    if r <= core["cone_radius"]:
+        return core["pile_apex_height"] - (core["pile_apex_height"] - core["transition_height"]) * (
+            r / core["cone_radius"] if core["cone_radius"] else 0.0
+        )
+    if r <= core["radius"]:
+        sphere_center = stem_wall + dome_height - core["radius_of_curvature"]
+        under_dome = math.sqrt(max(core["radius_of_curvature"] ** 2 - r ** 2, 0.0))
+        return min(stem_wall + dome_height, sphere_center + under_dome)
+    return 0.0
+
+
+def live_dead_reclaim(
+    diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard, openings, samples=280
+):
+    """Live/dead split for a dome with floor hopper openings.
+
+    Integrates the live column depth max(0, product_surface - channel_surface)
+    over the plan. Assumes the opening layout is symmetric in both axes about
+    the dome center (true for a centered opening, an inline row, or a
+    centered grid of tunnels), which lets us integrate one quadrant.
+    """
+    core = _dry_bulk_core(diameter, dome_height, stem_wall, repose_deg, freeboard)
+    radius = core["radius"]
+    t_dd = math.tan(math.radians(drawdown_deg))
+
+    step = radius / samples
+    live_volume = 0.0
+    for i in range(samples):
+        x = (i + 0.5) * step
+        for j in range(samples):
+            y = (j + 0.5) * step
+            r = math.hypot(x, y)
+            if r > radius:
+                continue
+            surface = _product_surface_height(r, core, stem_wall, dome_height)
+            channel = t_dd * min(_distance_to_opening(x, y, o) for o in openings)
+            if surface > channel:
+                live_volume += (surface - channel) * step * step
+    live_volume *= 4  # quadrant symmetry
+
+    # Where the channel meets the product surface along the +x axis (the
+    # section drawing's funnel extent), found by scanning outward.
+    reach = 0.0
+    scan_step = radius / 2000
+    for i in range(2000):
+        x = (i + 0.5) * scan_step
+        surface = _product_surface_height(x, core, stem_wall, dome_height)
+        channel = t_dd * min(_distance_to_opening(x, 0.0, o) for o in openings)
+        if surface > channel:
+            reach = x
+    reach_elevation = _product_surface_height(reach, core, stem_wall, dome_height)
+
+    return {
+        "core": core,
+        "live_volume": live_volume,
+        "dead_volume": core["product_volume"] - live_volume,
+        "live_share": live_volume / core["product_volume"] if core["product_volume"] else 0.0,
+        "channel_reach": reach,
+        "channel_reach_elevation": reach_elevation,
+    }
+
+
+def live_dead_storage(
+    diameter, dome_height, stem_wall, repose_deg, drawdown_deg, density, density_unit,
+    length_unit, freeboard, opening_width, opening_length, required_live=0.0,
+):
+    """Result sections for the Live & Dead Storage calculator (single
+    centered opening for now; the engine already accepts many openings)."""
+    if drawdown_deg <= repose_deg:
+        raise ValueError("Drawdown angle must be steeper than the angle of repose.")
+
+    openings = [(0.0, 0.0, opening_width, opening_length)]
+    reclaim = live_dead_reclaim(
+        diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard, openings
+    )
+
+    mass_unit_label = "ton" if length_unit in ("ft", "in") else "tonne"
+
+    def mass_of(volume_native):
+        mass_kg = _mass_kg(volume_native, length_unit, density, density_unit)
+        return mass_kg / US_TON_TO_KG if mass_unit_label == "ton" else mass_kg / 1000.0
+
+    sections = dry_bulk_storage_dome(
+        diameter, dome_height, stem_wall, repose_deg, density, density_unit, length_unit, freeboard
+    )
+
+    reclaim_rows = [
+        ("Live Volume", reclaim["live_volume"], 3),
+        ("Live Mass", mass_of(reclaim["live_volume"]), mass_unit_label),
+        ("Dead Volume", reclaim["dead_volume"], 3),
+        ("Dead Mass", mass_of(reclaim["dead_volume"]), mass_unit_label),
+        ("Live Share of Stored", reclaim["live_share"] * 100, "%"),
+        ("Channel Meets Surface at (±)", reclaim["channel_reach"], 1),
+        ("Surface Elevation There", reclaim["channel_reach_elevation"], 1),
+    ]
+    opening_label = f"{opening_width:,.2f} × {opening_length:,.2f} {length_unit} opening"
+    sections.insert(1, (f"Reclaim — {opening_label}", reclaim_rows))
+
+    if required_live > 0:
+        margin = (reclaim["live_volume"] - required_live) / required_live * 100
+        sections.insert(2, ("Live Storage Check", [
+            ("Required", required_live, 3),
+            ("Provided", reclaim["live_volume"], 3),
+            ("Margin", margin, "%"),
+        ]))
+
+    # Opening size sensitivity: what a larger or longer opening recovers.
+    sensitivity_rows = []
+    for w_mult, l_mult in ((1.0, 1.0), (1.2, 1.2), (1.6, 1.6), (1.0, 2.0), (1.0, 4.0)):
+        w, l = opening_width * w_mult, opening_length * l_mult
+        variant = live_dead_reclaim(
+            diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard,
+            [(0.0, 0.0, w, l)], samples=200,
+        )
+        sensitivity_rows.append((f"{w:,.2f} × {l:,.2f} {length_unit}", variant["live_volume"], 3))
+    sections.append(("Opening Size Sensitivity — Live Volume", sensitivity_rows))
+
+    return sections

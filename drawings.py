@@ -11,7 +11,7 @@ Each draw function returns a list of (title, svg, caption) boxes.
 
 import math
 
-from geometry import dry_bulk_geometry, solve_dry_bulk_dome_radius
+from geometry import dry_bulk_geometry, live_dead_reclaim, solve_dry_bulk_dome_radius
 
 STRUCT = 'stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 STRUCT_THIN = 'stroke="#333" stroke-width="1.8" fill="none"'
@@ -206,17 +206,12 @@ def ellipse2d(v):
     return [("Plan View", _svg(body, width, height), "Drawn to scale")]
 
 
-def _dry_bulk_drawing(diameter, dome_height, stem_wall, angle, freeboard, units):
-    core = dry_bulk_geometry(diameter, dome_height, stem_wall, angle, freeboard)
+def _pile_outline(core, stem_wall, dome_height):
+    """World-coordinate outline of the stored pile: up the wall (and along
+    the dome curve if the pile reaches past the stem wall) to the transition
+    point, to the peak, mirrored down."""
     radius, curvature = core["radius"], core["radius_of_curvature"]
     transition, peak = core["transition_height"], core["pile_apex_height"]
-    cone_radius = core["cone_radius"]
-    total = stem_wall + dome_height
-
-    scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
-
-    # Pile outline: up the wall (and along the dome curve if the pile reaches
-    # past the stem wall) to the transition point, to the peak, mirrored down.
     center_y = stem_wall + dome_height - curvature  # dome sphere center, world y
     left = [(-radius, 0.0)]
     if transition <= stem_wall:
@@ -228,16 +223,27 @@ def _dry_bulk_drawing(diameter, dome_height, stem_wall, angle, freeboard, units)
             y = stem_wall + (transition - stem_wall) * i / steps
             x = math.sqrt(max(curvature ** 2 - (y - center_y) ** 2, 0.0))
             left.append((-x, y))
-    points = left + [(0.0, peak)] + [(-x, y) for x, y in reversed(left)]
-    point_str = " ".join(f"{x_px(x)},{y_px(y)}" for x, y in points)
+    return left + [(0.0, peak)] + [(-x, y) for x, y in reversed(left)]
 
-    body = f'<polygon points="{point_str}" {PILE}/>'
+
+def _polygon_str(points, x_px, y_px):
+    return " ".join(f"{x_px(x)},{y_px(y)}" for x, y in points)
+
+
+def _dry_bulk_drawing(diameter, dome_height, stem_wall, angle, freeboard, units):
+    core = dry_bulk_geometry(diameter, dome_height, stem_wall, angle, freeboard)
+    radius = core["radius"]
+    total = stem_wall + dome_height
+
+    scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
+
+    body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
     body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
     elevation = close(body)
 
     # Plan: floor circle with the pile cone's base circle dashed inside.
     plan = _plan_view(
-        scale, x_px, width, (radius, radius), inner_dashed=(cone_radius, cone_radius)
+        scale, x_px, width, (radius, radius), inner_dashed=(core["cone_radius"], core["cone_radius"])
     )
     return _dome_pair(elevation, plan)
 
@@ -254,3 +260,93 @@ def dry_bulk_sizer(v):
         v["angle"], v["stem_wall"], v["units"], v["freeboard"],
     )
     return _dry_bulk_drawing(2 * radius, radius, v["stem_wall"], v["angle"], v["freeboard"], v["units"])
+
+
+# -- Live & dead reclaim drawing --
+
+HEAT_STOPS = [  # live column depth 0 -> max, light to dark
+    (253, 246, 195), (159, 217, 179), (63, 143, 192), (18, 48, 107),
+]
+
+
+def _heat_color(fraction):
+    fraction = min(max(fraction, 0.0), 1.0)
+    scaled = fraction * (len(HEAT_STOPS) - 1)
+    i = min(int(scaled), len(HEAT_STOPS) - 2)
+    t = scaled - i
+    rgb = [round(HEAT_STOPS[i][c] + (HEAT_STOPS[i + 1][c] - HEAT_STOPS[i][c]) * t) for c in range(3)]
+    return f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
+
+
+def live_dead(v):
+    diameter, dome_height, stem_wall = v["diameter"], v["height"], v["stem_wall"]
+    repose, drawdown, freeboard = v["angle"], v["drawdown"], v["freeboard"]
+    open_w, open_l, units = v["opening_w"], v["opening_l"], v["units"]
+
+    openings = [(0.0, 0.0, open_w, open_l)]
+    reclaim = live_dead_reclaim(
+        diameter, dome_height, stem_wall, repose, drawdown, freeboard, openings, samples=120
+    )
+    core = reclaim["core"]
+    radius, total = core["radius"], stem_wall + dome_height
+    apex, reach = core["pile_apex_height"], reclaim["channel_reach"]
+    t_dd = math.tan(math.radians(drawdown))
+    half_w = open_w / 2
+
+    def surface(r):
+        if r <= core["cone_radius"]:
+            slope = (apex - core["transition_height"]) / core["cone_radius"] if core["cone_radius"] else 0
+            return apex - slope * r
+        center_y = stem_wall + dome_height - core["radius_of_curvature"]
+        return min(total, center_y + math.sqrt(max(core["radius_of_curvature"] ** 2 - r ** 2, 0.0)))
+
+    # Section: gray pile, blue live channel (funnel walls up from the opening
+    # edges, capped by the product surface sampled to the channel reach).
+    scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
+    body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
+
+    live_pts = [(-half_w, 0.0), (-reach, surface(reach))]
+    steps = 16
+    for i in range(1, steps):
+        x = -reach + (2 * reach) * i / steps
+        live_pts.append((x, surface(abs(x))))
+    live_pts += [(reach, surface(reach)), (half_w, 0.0)]
+    body += (
+        f'<polygon points="{_polygon_str(live_pts, x_px, y_px)}" '
+        'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
+    )
+    body += f'<rect x="{x_px(-half_w)}" y="{y_px(0) - 3}" width="{(x_px(half_w) - x_px(-half_w)):.1f}" height="4" fill="#b03a2e"/>'
+    body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
+    label = 'font-size="13" font-family="system-ui, sans-serif" font-weight="600"'
+    body += f'<text x="{x_px(0)}" y="{y_px(apex * 0.35)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
+    body += f'<text x="{x_px(-radius * 0.72)}" y="{y_px(stem_wall * 0.3)}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
+    body += f'<text x="{x_px(radius * 0.72)}" y="{y_px(stem_wall * 0.3)}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
+    elevation = close(body)
+
+    # Plan heatmap: concentric bands of live column depth (near-radial for a
+    # centered opening), deepest at the opening, zero at the channel reach.
+    height_px = 2 * radius * scale + 40
+    cx, cy = x_px(0.0), round(height_px / 2, 1)
+    max_depth = surface(0.0)
+    bands = 16
+    heat = ""
+    for i in range(bands, 0, -1):
+        r = reach * i / bands
+        r_mid = reach * (i - 0.5) / bands
+        depth = surface(r_mid) - t_dd * max(r_mid - half_w, 0.0)
+        heat += (
+            f'<circle cx="{cx}" cy="{cy}" r="{r * scale:.1f}" '
+            f'fill="{_heat_color(depth / max_depth)}" stroke="none"/>'
+        )
+    heat += (
+        f'<rect x="{cx - half_w * scale:.1f}" y="{cy - open_l / 2 * scale:.1f}" '
+        f'width="{open_w * scale:.1f}" height="{open_l * scale:.1f}" '
+        'fill="#b03a2e" stroke="#fff" stroke-width="1"/>'
+    )
+    heat += f'<circle cx="{cx}" cy="{cy}" r="{radius * scale:.1f}" {STRUCT_THIN}/>'
+    plan = _svg(heat, width, height_px)
+
+    return [
+        ("Reclaim Section — Live & Dead", elevation, SCALE_CAPTION),
+        ("Plan — Live Column Depth", plan, "Darker is a deeper live column; red is the hopper opening"),
+    ]

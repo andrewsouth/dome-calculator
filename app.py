@@ -5,6 +5,7 @@ import drawings
 import iso
 from geometry import (
     dry_bulk_storage_dome,
+    live_dead_storage,
     dry_bulk_storage_sizer,
     ellipse,
     ellipsoid_dome,
@@ -30,6 +31,10 @@ def plain_number_field(key, label, default, suffix=""):
     return {"key": key, "label": label, "default": default, "kind": "number", "unit": suffix}
 
 
+def volume_field(key, label, default):
+    return {"key": key, "label": label, "default": default, "kind": "number", "unit": "volume"}
+
+
 def select_field(key, label, default, choices):
     return {"key": key, "label": label, "default": default, "kind": "select", "choices": choices}
 
@@ -37,9 +42,10 @@ def select_field(key, label, default, choices):
 _ICON_STROKE = 'stroke="#444" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 
 
-def _dome_icon(dome_ry=30, stem_wall=False, pile=False, dashed=False):
+def _dome_icon(dome_ry=30, stem_wall=False, pile=False, dashed=False, funnel=False):
     """Ground line + dome arc (radius 30, chord 20..80); optional stem wall,
-    dashed outline, and a product pile at a ~30 degree angle of repose."""
+    dashed outline, a product pile at a ~30 degree angle of repose, and a
+    reclaim funnel channel inside the pile."""
     dash = ' stroke-dasharray="5,4"' if dashed else ""
     base_y = 50 if stem_wall else 65
     # Pile with no freeboard: fills against the stem walls and up the dome
@@ -58,9 +64,15 @@ def _dome_icon(dome_ry=30, stem_wall=False, pile=False, dashed=False):
         f'<path d="M80 65 L80 50" {_ICON_STROKE}{dash}/>'
         if stem_wall else ""
     )
+    funnel_svg = (
+        '<polygon points="46,64 54,64 73,33 50,20 27,33" '
+        'fill="#a9c4e4" stroke="#44608c" stroke-width="1.5" stroke-linejoin="round"/>'
+        if funnel else ""
+    )
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
         <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
         {pile_svg}
+        {funnel_svg}
         {walls_svg}
         <path d="M20 {base_y} A30 {dome_ry} 0 0 1 80 {base_y}" {_ICON_STROKE}{dash}/>
     </svg>"""
@@ -159,6 +171,19 @@ def _validate_dry_bulk_calculator(v):
         errors.append("Density must be greater than 0.")
     if v["freeboard"] < 0:
         errors.append("Freeboard cannot be negative.")
+    return errors
+
+
+def _validate_live_dead(v):
+    errors = _validate_dry_bulk_calculator(v)
+    if not (v["angle"] < v["drawdown"] < 90):
+        errors.append("Drawdown angle must be steeper than the angle of repose and less than 90 degrees.")
+    if v["opening_w"] <= 0 or v["opening_l"] <= 0:
+        errors.append("Opening dimensions must be greater than 0.")
+    elif v["opening_w"] >= v["diameter"] or v["opening_l"] >= v["diameter"]:
+        errors.append("Opening must be smaller than the dome diameter.")
+    if v["required_live"] < 0:
+        errors.append("Required live volume cannot be negative.")
     return errors
 
 
@@ -299,6 +324,38 @@ SHAPES = {
         "compute": lambda v: dry_bulk_storage_sizer(
             v["capacity"], v["weight_unit"], v["density"], v["density_unit"], v["angle"], v["stem_wall"], v["units"],
             v["freeboard"],
+        ),
+    },
+    "live_dead": {
+        "label": "Live & Dead Storage",
+        "category": "storage",
+        "detail_prefixes": [
+            "Cone @", "Portion above cone", "Frustum below cone",
+            "Floor:", "Dome:", "Stem Wall:", "Total:",
+        ],
+        "diagram": diagrams.live_dead(),
+        "iso": iso.dry_bulk_calculator(),
+        "draw": drawings.live_dead,
+        "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True, funnel=True),
+        "icon_small": _dome_icon(dome_ry=30),
+        "fields": [
+            number_field("diameter", "Diameter", 66.0),
+            number_field("height", "Height", 33.0),
+            number_field("stem_wall", "Stem Wall", 59.0),
+            plain_number_field("angle", "Angle of Repose", 37.0, "°"),
+            plain_number_field("drawdown", "Angle of Drawdown", 70.0, "°"),
+            plain_number_field("density", "Density", 100.0),
+            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
+            number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
+            number_field("opening_w", "Opening Width", 5.0),
+            number_field("opening_l", "Opening Length", 5.0),
+            volume_field("required_live", "Required Live (0 = skip)", 0.0),
+        ],
+        "validate": _validate_live_dead,
+        "compute": lambda v: live_dead_storage(
+            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
+            v["density"], v["density_unit"], v["units"], v["freeboard"],
+            v["opening_w"], v["opening_l"], v["required_live"],
         ),
     },
 }

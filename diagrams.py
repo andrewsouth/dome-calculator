@@ -165,6 +165,29 @@ def dry_bulk_calculator():
     return _svg(body)
 
 
+def live_dead():
+    """Bulk calculator schematic plus the reclaim inputs: a hopper opening in
+    the floor and the drawdown funnel rising from its edges. The funnel lines
+    from (145,158)/(155,158) at ~70 degrees meet the 30-degree pile surface
+    at (111.9, 67.1) and (188.1, 67.1)."""
+    body = _dome_structure(HEMI_ARC)
+    body += _pile_with_angle_and_freeboard()
+    body += (
+        '<polygon points="145,158 111.9,67.1 150,45 188.1,67.1 155,158" '
+        'fill="#b5cbe8" fill-opacity="0.75" stroke="#44608c" stroke-width="1.5" stroke-linejoin="round"/>'
+    )
+    body += '<rect x="144" y="155" width="12" height="5" fill="#b03a2e"/>'
+    body += f'<text x="163" y="152" text-anchor="start" {TEXT}>Opening</text>'
+    body += _ext(165, 130, 205, 130)
+    body += f'<path d="M185 130 A 20 20 0 0 0 171.8 111.2" {DIM}/>'
+    body += f'<text x="190" y="120" text-anchor="start" {TEXT}>Drawdown</text>'
+    body += _hdim(60, 240, 180, "Diameter")
+    body += _ext(43, 120, 257, 120) + _ext(150, 30, 257, 30)
+    body += _vdim(257, 30, 120, "Height")
+    body += _vdim(43, 120, 160, "Stem Wall", side=-1)
+    return _svg(body)
+
+
 def dry_bulk_sizer():
     body = (
         f'<line x1="25" y1="160" x2="275" y2="160" {STRUCT}/>'

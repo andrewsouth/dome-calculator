@@ -122,7 +122,7 @@
             </select>
           {% else %}
             <label for="{{ field.key }}">
-              {{ field.label }}{% if field.unit == "length" %} ({{ values.units }}){% elif field.unit %} ({{ field.unit }}){% endif %}
+              {{ field.label }}{% if field.unit == "length" %} ({{ values.units }}){% elif field.unit == "volume" %} ({{ values.units }}&sup3;){% elif field.unit %} ({{ field.unit }}){% endif %}
             </label>
             <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.2f}'.format(values[field.key]) }}">
           {% endif %}

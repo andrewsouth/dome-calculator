@@ -344,3 +344,76 @@ def test_dry_bulk_calculator_t_per_m3_density_unit():
         _value(_section(in_kg, "Product"), "Capacity"),
         rel_tol=1e-9,
     )
+
+
+def test_live_dead_reclaim_reproduces_pa0004_document():
+    # South Industries PA0004 Option A: 20.12 m dia hemisphere on a 17.98 m
+    # stem wall, 37 deg repose, 70 deg drawdown, 0.61 m freeboard, single
+    # centered 1.524 m (5 ft) square hopper. Doc: total 7,105.2 m3, live
+    # 2,313 m3, dead 4,792 m3 (32.6% live), channel meets surface at 8.43 m.
+    from geometry import live_dead_reclaim
+
+    reclaim = live_dead_reclaim(
+        diameter=20.12, dome_height=10.06, stem_wall=17.98,
+        repose_deg=37.0, drawdown_deg=70.0, freeboard=0.61,
+        openings=[(0.0, 0.0, 1.524, 1.524)],
+    )
+    assert math.isclose(reclaim["core"]["product_volume"], 7105.2, rel_tol=5e-3)
+    assert math.isclose(reclaim["live_volume"], 2313.0, rel_tol=1.5e-2)
+    assert math.isclose(reclaim["dead_volume"], 4792.0, rel_tol=1.5e-2)
+    assert math.isclose(reclaim["live_share"], 0.326, rel_tol=2e-2)
+    assert math.isclose(reclaim["channel_reach"], 8.43, rel_tol=1e-2)
+
+
+def test_live_dead_larger_and_longer_openings_recover_more():
+    from geometry import live_dead_reclaim
+
+    kwargs = dict(
+        diameter=20.12, dome_height=10.06, stem_wall=17.98,
+        repose_deg=37.0, drawdown_deg=70.0, freeboard=0.61, samples=160,
+    )
+    base = live_dead_reclaim(openings=[(0.0, 0.0, 1.524, 1.524)], **kwargs)["live_volume"]
+    bigger = live_dead_reclaim(openings=[(0.0, 0.0, 1.83, 1.83)], **kwargs)["live_volume"]
+    longer = live_dead_reclaim(openings=[(0.0, 0.0, 1.83, 6.1)], **kwargs)["live_volume"]
+    assert base < bigger < longer
+
+
+def test_live_dead_multiple_openings_union_beats_single():
+    from geometry import live_dead_reclaim
+
+    kwargs = dict(
+        diameter=20.12, dome_height=10.06, stem_wall=17.98,
+        repose_deg=37.0, drawdown_deg=70.0, freeboard=0.61, samples=160,
+    )
+    single = live_dead_reclaim(openings=[(0.0, 0.0, 1.524, 1.524)], **kwargs)
+    # Symmetric pair of inline hoppers 8 m apart (as along a reclaim tunnel).
+    pair = live_dead_reclaim(
+        openings=[(0.0, -4.0, 1.524, 1.524), (0.0, 4.0, 1.524, 1.524)], **kwargs
+    )
+    # Two channels overlap mid-span and the off-center ones sit under a lower
+    # product surface, so the union lands well between 1x and 2x a single.
+    assert single["live_volume"] * 1.3 < pair["live_volume"] < single["live_volume"] * 2.0
+    assert pair["dead_volume"] + pair["live_volume"] == pytest.approx(
+        single["dead_volume"] + single["live_volume"]
+    )
+
+
+def test_live_dead_storage_sections_include_check_and_sensitivity():
+    from geometry import live_dead_storage
+
+    sections = live_dead_storage(
+        diameter=66.0, dome_height=33.0, stem_wall=59.0, repose_deg=37.0,
+        drawdown_deg=70.0, density=100.0, density_unit="lbs/ft3",
+        length_unit="ft", freeboard=2.0, opening_width=5.0, opening_length=5.0,
+        required_live=75000.0,
+    )
+    titles = [title for title, _rows in sections]
+    assert any(title.startswith("Reclaim") for title in titles)
+    assert "Live Storage Check" in titles
+    assert any(title.startswith("Opening Size Sensitivity") for title in titles)
+
+    reclaim_rows = _section_starting_with(sections, "Reclaim")
+    live = _value(reclaim_rows, "Live Volume")
+    dead = _value(reclaim_rows, "Dead Volume")
+    product = _value(_section(sections, "Product"), "Volume")
+    assert live + dead == pytest.approx(product)
