@@ -18,7 +18,11 @@
     .errors { background: #fdecea; border: 1px solid #f5c2c0; color: #611a15; padding: 0.75rem 1rem; border-radius: 4px; }
     table { border-collapse: collapse; margin-top: 1rem; }
     td { padding: 0.3rem 1rem 0.3rem 0; }
-    td.value { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Fixed label/number column widths keep every section's digits and unit
+       columns aligned to the same vertical lines across the whole page. */
+    td:first-child { width: 13rem; }
+    td.value { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; width: 8rem; }
+    td.unit { text-align: left; padding-left: 0.4rem; color: #555; }
     .section-title { font-weight: 600; margin-top: 1rem; }
     .breadcrumb { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 1rem 0; font-size: 0.95rem; }
     .breadcrumb .step { background: #eee; border-radius: 4px; padding: 0.3rem 0.6rem; }
@@ -145,9 +149,8 @@
             {% for label, value, suffix in rows %}
               <tr>
                 <td>{{ label }}</td>
-                <td class="value">
-                  {{ "{:,.2f}".format(value) }}{% if suffix is string %}{% if suffix %} {{ suffix }}{% endif %}{% elif suffix > 0 %} {{ values.units }}{{ unit_suffix(suffix) }}{% endif %}
-                </td>
+                <td class="value">{{ "{:,.2f}".format(value) }}</td>
+                <td class="unit">{% if suffix is string %}{{ suffix }}{% elif suffix > 0 %}{{ values.units }}{{ unit_suffix(suffix) }}{% endif %}</td>
               </tr>
             {% endfor %}
           </table>
