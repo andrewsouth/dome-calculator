@@ -2,6 +2,7 @@ from flask import Flask, render_template, request
 
 import diagrams
 import drawings
+import iso
 from geometry import (
     dry_bulk_storage_dome,
     dry_bulk_storage_sizer,
@@ -180,6 +181,7 @@ SHAPES = {
     "spherical": {
         "label": "Spherical Section",
         "diagram": diagrams.spherical(),
+        "iso": iso.spherical(),
         "draw": drawings.spherical,
         "icon": _dome_icon(dome_ry=30),  # half sphere on the ground, no stem wall
         "icon_small": _dome_icon(dome_ry=30),
@@ -194,6 +196,7 @@ SHAPES = {
     "ellipsoid": {
         "label": "Ellipsoid",
         "diagram": diagrams.ellipsoid(),
+        "iso": iso.ellipsoid(),
         "draw": drawings.ellipsoid,
         "icon": _dome_icon(dome_ry=16.5),
         "fields": [
@@ -207,6 +210,7 @@ SHAPES = {
     "vertical_ellipsoid": {
         "label": "Vertical Ellipse",
         "diagram": diagrams.vertical_ellipsoid(),
+        "iso": iso.vertical_ellipsoid(),
         "draw": drawings.vertical_ellipsoid,
         "icon": _vertical_ellipsoid_icon(),
         "fields": [
@@ -220,6 +224,7 @@ SHAPES = {
     "horizontal_ellipsoid": {
         "label": "Horizontal Ellipse",
         "diagram": diagrams.horizontal_ellipsoid(),
+        "iso": iso.horizontal_ellipsoid(),
         "draw": drawings.horizontal_ellipsoid,
         "icon": _horizontal_ellipsoid_icon(),
         "fields": [
@@ -233,6 +238,7 @@ SHAPES = {
     "ellipse": {
         "label": "Ellipse",
         "diagram": diagrams.ellipse2d(),
+        "iso": iso.ellipse2d(),
         "draw": drawings.ellipse2d,
         "icon": _ellipse_icon(),
         "fields": [
@@ -246,6 +252,7 @@ SHAPES = {
         "label": "Bulk Storage Calculator",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_calculator(),
+        "iso": iso.dry_bulk_calculator(),
         "draw": drawings.dry_bulk_calculator,
         "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True),
         "icon_small": _dome_icon(dome_ry=30),
@@ -268,6 +275,7 @@ SHAPES = {
         "label": "Bulk Product Storage Sizer",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_sizer(),
+        "iso": iso.dry_bulk_sizer(),
         "draw": drawings.dry_bulk_sizer,
         "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True, dashed=True),
         "icon_small": _dome_icon(dome_ry=30),

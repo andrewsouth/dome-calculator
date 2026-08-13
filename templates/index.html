@@ -40,6 +40,7 @@
     .shape-card span { margin-top: auto; }
     .shape-card.small { width: 110px; padding: 0.5rem; font-size: 0.75rem; gap: 0.3rem; }
     .shape-card.small svg { width: 64px; height: 52px; }
+    .diagram-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; }
     .diagram { margin: 1rem 0 0; padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: inline-block; }
     .diagram svg { display: block; max-width: 100%; height: auto; }
     .drawing { margin: 1.5rem 0 0.5rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: block; width: fit-content; }
@@ -97,7 +98,10 @@
 
   {% else %}
     <p class="subtitle">Step 3 of 3 &mdash; enter dimensions</p>
-    <div class="diagram">{{ shapes[shape_key].diagram | safe }}</div>
+    <div class="diagram-row">
+      <div class="diagram">{{ shapes[shape_key].diagram | safe }}</div>
+      <div class="diagram">{{ shapes[shape_key].iso | safe }}</div>
+    </div>
     <form method="get" action="/">
       <input type="hidden" name="shape" value="{{ shape_key }}">
       <input type="hidden" name="units" value="{{ units }}">
