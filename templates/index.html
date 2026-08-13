@@ -28,7 +28,9 @@
     .breadcrumb .step { background: #eee; border-radius: 4px; padding: 0.3rem 0.6rem; }
     .breadcrumb a { font-size: 0.85rem; color: #555; }
     .breadcrumb .sep { color: #999; }
-    .shape-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.5rem 0; }
+    .shape-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.75rem 0 1.5rem; }
+    .category-title { font-size: 1.1rem; margin: 1.5rem 0 0.15rem; }
+    .category-blurb { margin: 0; font-size: 0.85rem; color: #777; }
     .shape-card {
       display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
       width: 130px; padding: 0.75rem; border: 1px solid #ccc; border-radius: 8px;
@@ -71,15 +73,19 @@
   {% endif %}
 
   {% if stage == 1 %}
-    <p class="subtitle">Step 1 of 3 &mdash; choose a dome shape</p>
-    <div class="shape-grid">
-      {% for key, shape in shapes.items() %}
-        <a class="shape-card" href="/?shape={{ key }}">
-          {{ shape.icon | safe }}
-          <span>{{ shape.label }}</span>
-        </a>
-      {% endfor %}
-    </div>
+    <p class="subtitle">Step 1 of 3 &mdash; choose a calculator</p>
+    {% for cat_key, cat_label, cat_blurb in categories %}
+      <h2 class="category-title">{{ cat_label }}</h2>
+      <p class="category-blurb">{{ cat_blurb }}</p>
+      <div class="shape-grid">
+        {% for key, shape in shapes.items() if shape.category == cat_key %}
+          <a class="shape-card" href="/?shape={{ key }}">
+            {{ shape.icon | safe }}
+            <span>{{ shape.label }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
 
   {% elif stage == 2 %}
     <p class="subtitle">Step 2 of 3 &mdash; choose units</p>

@@ -180,6 +180,7 @@ def _validate_dry_bulk_sizer(v):
 SHAPES = {
     "spherical": {
         "label": "Spherical Section",
+        "category": "geometry",
         "diagram": diagrams.spherical(),
         "iso": iso.spherical(),
         "draw": drawings.spherical,
@@ -195,6 +196,7 @@ SHAPES = {
     },
     "ellipsoid": {
         "label": "Ellipsoid",
+        "category": "geometry",
         "diagram": diagrams.ellipsoid(),
         "iso": iso.ellipsoid(),
         "draw": drawings.ellipsoid,
@@ -209,6 +211,7 @@ SHAPES = {
     },
     "vertical_ellipsoid": {
         "label": "Vertical Ellipse",
+        "category": "geometry",
         "diagram": diagrams.vertical_ellipsoid(),
         "iso": iso.vertical_ellipsoid(),
         "draw": drawings.vertical_ellipsoid,
@@ -223,6 +226,7 @@ SHAPES = {
     },
     "horizontal_ellipsoid": {
         "label": "Horizontal Ellipse",
+        "category": "geometry",
         "diagram": diagrams.horizontal_ellipsoid(),
         "iso": iso.horizontal_ellipsoid(),
         "draw": drawings.horizontal_ellipsoid,
@@ -237,6 +241,7 @@ SHAPES = {
     },
     "ellipse": {
         "label": "Ellipse",
+        "category": "geometry",
         "diagram": diagrams.ellipse2d(),
         "iso": iso.ellipse2d(),
         "draw": drawings.ellipse2d,
@@ -250,6 +255,7 @@ SHAPES = {
     },
     "dry_bulk_calculator": {
         "label": "Bulk Storage Calculator",
+        "category": "storage",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_calculator(),
         "iso": iso.dry_bulk_calculator(),
@@ -273,6 +279,7 @@ SHAPES = {
     },
     "dry_bulk_sizer": {
         "label": "Bulk Product Storage Sizer",
+        "category": "storage",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_sizer(),
         "iso": iso.dry_bulk_sizer(),
@@ -295,6 +302,11 @@ SHAPES = {
         ),
     },
 }
+
+CATEGORIES = [
+    ("geometry", "Shape & Geometry", "Dimensions, areas, and volumes of dome shapes and ellipses."),
+    ("storage", "Bulk Product Storage", "Capacity of product piled inside a storage dome, or the dome size needed for a target capacity."),
+]
 
 # The small breadcrumb card (steps 2-3) shows a simplified icon where one is
 # set: the spherical-cap shapes reduce to a plain half-sphere section.
@@ -326,6 +338,7 @@ def index():
             shape_key=shape_key,
             units=units,
             shapes=SHAPES,
+            categories=CATEGORIES,
             unit_choices=UNIT_CHOICES,
         )
 
