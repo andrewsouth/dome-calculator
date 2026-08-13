@@ -8,7 +8,12 @@ dimension annotations in blue, reference/extension lines dashed light gray.
 STRUCT = 'stroke="#333" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 DIM = 'stroke="#0b72b9" stroke-width="1.5" fill="none"'
 EXT = 'stroke="#aaa" stroke-width="1" stroke-dasharray="4,3"'
-TEXT = 'font-size="16" font-family="system-ui, sans-serif" fill="#0b72b9"'
+# paint-order+white stroke gives labels a knockout halo, so structure lines
+# appear to break behind text instead of cutting through it.
+TEXT = (
+    'font-size="16" font-family="system-ui, sans-serif" fill="#0b72b9" '
+    'stroke="#fff" stroke-width="4" paint-order="stroke" stroke-linejoin="round"'
+)
 
 ARROW_DEFS = (
     '<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" '
