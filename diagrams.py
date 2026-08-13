@@ -68,7 +68,7 @@ def _dome_diagram(arc_path, apex_y):
     """Diameter / Height / Stem Wall annotations shared by the round-based domes."""
     body = _dome_structure(arc_path)
     body += _hdim(60, 240, 180, "Diameter")
-    body += _ext(150, apex_y, 257, apex_y) + _ext(243, 120, 257, 120)
+    body += _ext(150, apex_y, 257, apex_y) + _ext(43, 120, 257, 120)
     body += _vdim(257, apex_y, 120, "Height")
     body += _vdim(43, 120, 160, "Stem Wall", side=-1)
     return _svg(body)
@@ -159,7 +159,7 @@ def dry_bulk_calculator():
     body = _dome_structure(HEMI_ARC)
     body += _pile_with_angle_and_freeboard()
     body += _hdim(60, 240, 180, "Diameter")
-    body += _ext(243, 120, 257, 120) + _ext(150, 30, 257, 30)
+    body += _ext(43, 120, 257, 120) + _ext(150, 30, 257, 30)
     body += _vdim(257, 30, 120, "Height")
     body += _vdim(43, 120, 160, "Stem Wall", side=-1)
     return _svg(body)
