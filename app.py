@@ -67,7 +67,6 @@ def _dome_icon(dome_ry=20, stem_wall=False, pile=False, dashed=False):
 
 def _vertical_ellipsoid_icon():
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
-        <line x1="8" y1="74" x2="92" y2="74" {_ICON_STROKE}/>
         <ellipse cx="50" cy="42" rx="18" ry="28" {_ICON_STROKE}/>
         <line x1="14" y1="58" x2="86" y2="58" {_ICON_STROKE}/>
     </svg>"""
@@ -75,7 +74,6 @@ def _vertical_ellipsoid_icon():
 
 def _horizontal_ellipsoid_icon():
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
-        <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
         <ellipse cx="50" cy="38" rx="38" ry="18" {_ICON_STROKE}/>
         <line x1="14" y1="51" x2="86" y2="51" {_ICON_STROKE}/>
     </svg>"""
