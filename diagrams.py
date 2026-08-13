@@ -126,27 +126,35 @@ def ellipse2d():
     return _svg(body, view_h=180)
 
 
-def _pile_with_angle_and_freeboard(apex_y=55, peak_y=80):
-    """Gray material pile (fills against walls, cone on top), angle-of-repose
-    arc at the cone's left base, and a freeboard gap dimension at the apex."""
+# Bulk storage schematic geometry: hemisphere shell of radius 90 on the
+# 60..240 base (apex y=30), matching the shape cards. The pile (drawn on an
+# inner shell of radius 88 so it sits inside the stroke) bears up the stem
+# wall and along the dome wall to where a 30-degree repose line from the
+# peak meets the shell: peak (150,45) leaves a visible freeboard gap below
+# the apex, and the 30-degree line meets r=88 at (150 +- 83.9, 93.4)
+# (rise 48.4 over run 83.9 = 30 degrees each side).
+HEMI_ARC = "M60 120 A 90 90 0 0 1 240 120"
+
+
+def _pile_with_angle_and_freeboard(apex_y=30, peak_y=45):
     parts = (
-        f'<polygon points="62,158 238,158 238,108 150,{peak_y} 62,108" '
-        'fill="#ddd" stroke="#666" stroke-width="1"/>'
+        '<path d="M62 158 L62 120 A88 88 0 0 1 66.1 93.4 L150 45 L233.9 93.4 '
+        'A88 88 0 0 1 238 120 L238 158 Z" fill="#ddd" stroke="#666" stroke-width="1"/>'
     )
-    parts += _ext(62, 108, 105, 108)
-    parts += f'<path d="M90 108 A 28 28 0 0 0 88.7 99.5" {DIM}/>'
-    parts += f'<text x="97" y="102" text-anchor="start" {TEXT}>Angle</text>'
+    parts += _ext(66, 93.4, 112, 93.4)
+    parts += f'<path d="M96 93.4 A 30 30 0 0 0 92 78.4" {DIM}/>'
+    parts += f'<text x="101" y="88" text-anchor="start" {TEXT}>Angle</text>'
     parts += _vdim(150, apex_y, peak_y, "", side=1)
-    parts += f'<text x="150" y="{apex_y - 11}" text-anchor="middle" {TEXT}>Freeboard</text>'
+    parts += f'<text x="150" y="{apex_y - 9}" text-anchor="middle" {TEXT}>Freeboard</text>'
     return parts
 
 
 def dry_bulk_calculator():
-    body = _dome_structure("M60 120 A 94.81 94.81 0 0 1 240 120")
+    body = _dome_structure(HEMI_ARC)
     body += _pile_with_angle_and_freeboard()
     body += _hdim(60, 240, 180, "Diameter")
-    body += _ext(243, 120, 257, 120)
-    body += _vdim(257, 55, 120, "Height")
+    body += _ext(243, 120, 257, 120) + _ext(150, 30, 257, 30)
+    body += _vdim(257, 30, 120, "Height")
     body += _vdim(43, 120, 160, "Stem Wall", side=-1)
     return _svg(body)
 
@@ -156,7 +164,7 @@ def dry_bulk_sizer():
         f'<line x1="25" y1="160" x2="275" y2="160" {STRUCT}/>'
         f'<line x1="60" y1="160" x2="60" y2="120" {STRUCT}/>'
         f'<line x1="240" y1="160" x2="240" y2="120" {STRUCT}/>'
-        f'<path d="M60 120 A 94.81 94.81 0 0 1 240 120" {STRUCT} stroke-dasharray="6,5"/>'
+        f'<path d="{HEMI_ARC}" {STRUCT} stroke-dasharray="6,5"/>'
     )
     body += _pile_with_angle_and_freeboard()
     body += f'<text x="150" y="140" text-anchor="middle" font-size="15" font-family="system-ui, sans-serif" fill="#555">Capacity</text>'
