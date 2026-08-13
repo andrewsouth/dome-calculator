@@ -36,32 +36,32 @@ def select_field(key, label, default, choices):
 _ICON_STROKE = 'stroke="#444" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 
 
-def _dome_icon(dome_ry=20, stem_wall=False, pile=False, dashed=False):
-    """Ground line + dome arc; optional stem wall, dashed outline, and a
-    product pile filling against the walls at a ~30 degree angle of repose."""
+def _dome_icon(dome_ry=30, stem_wall=False, pile=False, dashed=False):
+    """Ground line + dome arc (radius 30, chord 20..80); optional stem wall,
+    dashed outline, and a product pile at a ~30 degree angle of repose."""
     dash = ' stroke-dasharray="5,4"' if dashed else ""
     base_y = 50 if stem_wall else 65
     # Pile with no freeboard: fills against the stem walls and up the dome
     # wall, peaking at the apex. A 30-degree repose line from the apex
-    # (50,30) meets the r=20 shell at (50 +- 17.3, 40), so the outline runs
+    # (50,20) meets the r=30 shell at (50 +- 26, 35), so the outline runs
     # up the wall, along the dome arc to that contact point, then straight
-    # to the peak (slope 10/17.3 = 30 degrees each side).
+    # to the peak (slope 15/26 = 30 degrees each side).
     pile_svg = (
-        '<path d="M30 65 L30 50 A20 20 0 0 1 32.7 40 L50 30 L67.3 40 '
-        'A20 20 0 0 1 70 50 L70 65 Z" '
+        '<path d="M20 65 L20 50 A30 30 0 0 1 24 35 L50 20 L76 35 '
+        'A30 30 0 0 1 80 50 L80 65 Z" '
         'fill="#ccc" stroke="#444" stroke-width="2" stroke-linejoin="round"/>'
         if pile else ""
     )
     walls_svg = (
-        f'<path d="M30 65 L30 50" {_ICON_STROKE}{dash}/>'
-        f'<path d="M70 65 L70 50" {_ICON_STROKE}{dash}/>'
+        f'<path d="M20 65 L20 50" {_ICON_STROKE}{dash}/>'
+        f'<path d="M80 65 L80 50" {_ICON_STROKE}{dash}/>'
         if stem_wall else ""
     )
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
         <line x1="8" y1="65" x2="92" y2="65" {_ICON_STROKE}/>
         {pile_svg}
         {walls_svg}
-        <path d="M30 {base_y} A20 {dome_ry} 0 0 1 70 {base_y}" {_ICON_STROKE}{dash}/>
+        <path d="M20 {base_y} A30 {dome_ry} 0 0 1 80 {base_y}" {_ICON_STROKE}{dash}/>
     </svg>"""
 
 
@@ -81,9 +81,9 @@ def _horizontal_ellipsoid_icon():
 
 def _ellipse_icon():
     return f"""<svg viewBox="0 0 100 80" width="64" height="52">
-        <ellipse cx="50" cy="40" rx="38" ry="22" {_ICON_STROKE}/>
-        <line x1="10" y1="40" x2="90" y2="40" stroke="#aaa" stroke-width="1.5" stroke-dasharray="3,3"/>
-        <line x1="50" y1="16" x2="50" y2="64" stroke="#aaa" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <ellipse cx="50" cy="48" rx="38" ry="22" {_ICON_STROKE}/>
+        <line x1="10" y1="48" x2="90" y2="48" stroke="#aaa" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <line x1="50" y1="24" x2="50" y2="72" stroke="#aaa" stroke-width="1.5" stroke-dasharray="3,3"/>
     </svg>"""
 
 
@@ -181,8 +181,8 @@ SHAPES = {
         "label": "Spherical Section",
         "diagram": diagrams.spherical(),
         "draw": drawings.spherical,
-        "icon": _dome_icon(dome_ry=20),  # half sphere on the ground, no stem wall
-        "icon_small": _dome_icon(dome_ry=20),
+        "icon": _dome_icon(dome_ry=30),  # half sphere on the ground, no stem wall
+        "icon_small": _dome_icon(dome_ry=30),
         "fields": [
             number_field("diameter", "Diameter", 105.0),
             number_field("height", "Height", 35.0),
@@ -195,7 +195,7 @@ SHAPES = {
         "label": "Ellipsoid",
         "diagram": diagrams.ellipsoid(),
         "draw": drawings.ellipsoid,
-        "icon": _dome_icon(dome_ry=11),
+        "icon": _dome_icon(dome_ry=16.5),
         "fields": [
             number_field("diameter", "Diameter", 50.0),
             number_field("height", "Height", 20.0),
@@ -247,8 +247,8 @@ SHAPES = {
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_calculator(),
         "draw": drawings.dry_bulk_calculator,
-        "icon": _dome_icon(dome_ry=20, stem_wall=True, pile=True),
-        "icon_small": _dome_icon(dome_ry=20),
+        "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True),
+        "icon_small": _dome_icon(dome_ry=30),
         "fields": [
             number_field("diameter", "Diameter", 116.0),
             number_field("height", "Height", 58.0),
@@ -269,8 +269,8 @@ SHAPES = {
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_sizer(),
         "draw": drawings.dry_bulk_sizer,
-        "icon": _dome_icon(dome_ry=20, stem_wall=True, pile=True, dashed=True),
-        "icon_small": _dome_icon(dome_ry=20),
+        "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True, dashed=True),
+        "icon_small": _dome_icon(dome_ry=30),
         "fields": [
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
