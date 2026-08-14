@@ -385,78 +385,130 @@ def live_dead(v):
         ("Isometric — Dead Pile Surface", axo, "Height-banded surface of the material left after drawdown; craters are the funnels"),
     ]
 
-def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units, n=36):
-    """Excel-style isometric surface plot of the dead pile left after
-    drawdown: the surface height min(channel, product surface) is sampled
-    on a grid, projected isometrically, and rendered as height-banded quads
-    painted back to front. The flat apron outside the dome is the floor
-    plane, and each hopper carves its own crater."""
-    R = core["radius"]
+def _shade(hex_color, factor):
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return f"rgb({round(r * factor)},{round(g * factor)},{round(b * factor)})"
+
+
+def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units):
+    """Isometric surface plot of the dead pile left after drawdown, on a
+    polar grid so the plot is trimmed exactly to the dome footprint: rings
+    and spokes render the crater and rim smoothly, steep faces darken by
+    slope for consistent cliff shading, an outer skirt closes the collar's
+    face at the wall, and a dashed wireframe ghost of the shell shows the
+    structure in the same projection."""
+    R, total = core["radius"], stem_wall + dome_height
+    curvature = core["radius_of_curvature"]
+    n_rings, n_spokes = 30, 56
 
     def rect_distance(x, y, opening):
         cx, cy, w, l = opening
         return math.hypot(max(abs(x - cx) - w / 2, 0.0), max(abs(y - cy) - l / 2, 0.0))
 
     def dead_z(x, y):
-        r = math.hypot(x, y)
-        if r > R:
-            return 0.0
         channel = t_dd * min(rect_distance(x, y, o) for o in openings)
-        return max(0.0, min(channel, surface_fn(r)))
+        return max(0.0, min(channel, surface_fn(math.hypot(x, y))))
 
-    step = 2 * R / n
-    nodes = [[dead_z(-R + i * step, -R + j * step) for j in range(n + 1)] for i in range(n + 1)]
-    zmax = max(max(row) for row in nodes) or 1.0
+    # Polar nodes: rings 0..R, spokes around the circle.
+    nodes = []
+    for i in range(n_rings + 1):
+        r = R * i / n_rings
+        ring = []
+        for j in range(n_spokes):
+            theta = 2 * math.pi * j / n_spokes
+            x, y = r * math.cos(theta), r * math.sin(theta)
+            ring.append((x, y, dead_z(x, y)))
+        nodes.append(ring)
+    zmax = max(z for ring in nodes for _x, _y, z in ring) or 1.0
 
-    # Isometric projection: u = (x - y) cos30, v = (x + y) sin30 - z.
+    # Isometric projection; vertical scale fits the full shell ghost.
     c30, s30 = 0.8660, 0.5
-    scale = 250.0 / (4 * R * c30)
-    z_scale = min(scale, 120.0 / zmax)
+    scale = 250.0 / (2 * math.sqrt(2) * R * c30)
+    z_scale = min(scale, 118.0 / total)
     legend_h = 58
     ox = 150.0
-    oy = legend_h + 14 + R * scale * 2 * s30 / 2 + zmax * z_scale
+    oy = legend_h + 12 + total * z_scale + 0.7071 * R * scale
 
-    def project(i, j):
-        x, y = -R + i * step, -R + j * step
-        z = nodes[i][j]
+    def project(x, y, z):
         return (
             round(ox + (x - y) * c30 * scale, 1),
             round(oy + (x + y) * s30 * scale - z * z_scale, 1),
         )
 
-    bands = [
-        ("#5b9bd5", "#41729f"),  # low
-        ("#ed7d31", "#b55a1d"),  # mid
-        ("#a5a5a5", "#7d7d7d"),  # high
-    ]
+    bands = ["#5b9bd5", "#ed7d31", "#a5a5a5"]
 
-    quads = []
-    for i in range(n):
-        for j in range(n):
-            mean_z = (nodes[i][j] + nodes[i + 1][j] + nodes[i][j + 1] + nodes[i + 1][j + 1]) / 4
-            band = min(int(mean_z / zmax * 3), 2)
-            depth = i + j  # larger = nearer the viewer; paint far first
-            quads.append((depth, i, j, band))
-    quads.sort(key=lambda q: q[0])
+    def band_of(z):
+        return min(int(z / zmax * 3), 2)
 
+    ring_width = R / n_rings
+    faces = []  # (depth, fill, points)
+
+    for i in range(n_rings):
+        for j in range(n_spokes):
+            j2 = (j + 1) % n_spokes
+            quad = [nodes[i][j], nodes[i + 1][j], nodes[i + 1][j2], nodes[i][j2]]
+            zs = [p[2] for p in quad]
+            mean_z = sum(zs) / 4
+            slope = (max(zs) - min(zs)) / ring_width
+            factor = 1.0 if slope < 0.3 else max(0.68, 1.0 - 0.10 * slope)
+            fill = _shade(bands[band_of(mean_z)], factor)
+            depth = sum(p[0] + p[1] for p in quad) / 4
+            faces.append((depth, fill, [project(*p) for p in quad]))
+
+    # Outer skirt: the collar's face at the wall, dropped to the floor.
+    for j in range(n_spokes):
+        j2 = (j + 1) % n_spokes
+        a, b = nodes[n_rings][j], nodes[n_rings][j2]
+        if max(a[2], b[2]) < zmax * 0.01:
+            continue
+        mean_z = (a[2] + b[2]) / 2
+        fill = _shade(bands[band_of(mean_z)], 0.66)
+        pts = [
+            project(a[0], a[1], a[2]), project(b[0], b[1], b[2]),
+            project(b[0], b[1], 0.0), project(a[0], a[1], 0.0),
+        ]
+        faces.append((a[0] + a[1] + 0.01, fill, pts))
+
+    faces.sort(key=lambda f: f[0])
     body = ""
-    for _depth, i, j, band in quads:
-        pts = f"{'%s,%s' % project(i, j)} {'%s,%s' % project(i + 1, j)} " \
-              f"{'%s,%s' % project(i + 1, j + 1)} {'%s,%s' % project(i, j + 1)}"
-        fill, edge = bands[band]
-        body += f'<polygon points="{pts}" fill="{fill}" stroke="{edge}" stroke-width="0.4"/>'
+    for _depth, fill, pts in faces:
+        point_str = " ".join(f"{px},{py}" for px, py in pts)
+        body += f'<polygon points="{point_str}" fill="{fill}" stroke="{fill}" stroke-width="0.5"/>'
 
-    # Legend: three height bands, highest first like the reference sheet.
-    legend = ""
+    # Ghost of the shell: base ring, wall silhouette, springline, dome
+    # latitudes, and apex marker -- all in the same projection.
+    def ring_ghost(r, z, style):
+        return (
+            f'<ellipse cx="{ox}" cy="{round(oy - z * z_scale, 1)}" '
+            f'rx="{1.2247 * r * scale:.1f}" ry="{0.7071 * r * scale:.1f}" {style}/>'
+        )
+
+    ghost = ring_ghost(R, 0.0, STRUCT_THIN)
+    ghost += ring_ghost(R, stem_wall, DASHED)
+    u_edge = 1.2247 * R * scale
+    for side in (-1, 1):
+        ghost += (
+            f'<line x1="{ox + side * u_edge:.1f}" y1="{oy}" '
+            f'x2="{ox + side * u_edge:.1f}" y2="{round(oy - stem_wall * z_scale, 1)}" {DASHED}/>'
+        )
+    sphere_center = stem_wall + dome_height - curvature
+    for fraction in (0.45, 0.8):
+        z = stem_wall + dome_height * fraction
+        r = math.sqrt(max(curvature ** 2 - (z - sphere_center) ** 2, 0.0))
+        ghost += ring_ghost(r, z, DASHED)
+    apex_y = round(oy - total * z_scale, 1)
+    ghost += f'<circle cx="{ox}" cy="{apex_y}" r="1.6" fill="#999"/>'
+    body += ghost
+
+    # Legend, highest band first.
     for idx in range(2, -1, -1):
         lo, hi = zmax * idx / 3, zmax * (idx + 1) / 3
         y = 12 + (2 - idx) * 17
-        legend += f'<rect x="14" y="{y}" width="12" height="12" fill="{bands[idx][0]}"/>'
-        legend += (
+        body += f'<rect x="14" y="{y}" width="12" height="12" fill="{bands[idx]}"/>'
+        body += (
             f'<text x="32" y="{y + 10}" font-size="11" font-family="system-ui, sans-serif" '
             f'fill="#555">{lo:,.1f}&#8211;{hi:,.1f} {units}</text>'
         )
-    body += legend
 
-    height_px = oy + R * scale * 2 * s30 / 2 + 16
+    height_px = oy + 0.7071 * R * scale + 16
     return _svg(body, 300, height_px)
