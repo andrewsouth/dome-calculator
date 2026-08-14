@@ -350,20 +350,25 @@ def live_dead(v):
     body += f'<text x="{x_px(radius * 0.72)}" y="{y_px(stem_wall * 0.3)}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
     elevation = close(body)
 
-    # Plan heatmap: concentric bands of live column depth (near-radial for a
-    # centered opening), deepest at the opening, zero at the channel reach.
+    # Plan heatmap: concentric bands of DEAD pile depth (near-radial for a
+    # centered opening). Dead depth is the material below the funnel line --
+    # min(channel height, product surface): zero over the opening, deepest
+    # at the channel-reach ring, tapering as the surface drops to the wall.
     height_px = 2 * radius * scale + 40
     cx, cy = x_px(0.0), round(height_px / 2, 1)
-    max_depth = surface(0.0)
-    bands = 16
+
+    def dead_depth(r):
+        return min(t_dd * max(r - half_w, 0.0), surface(r))
+
+    bands = 20
+    max_depth = max(dead_depth(radius * i / 200) for i in range(201)) or 1.0
     heat = ""
     for i in range(bands, 0, -1):
-        r = reach * i / bands
-        r_mid = reach * (i - 0.5) / bands
-        depth = surface(r_mid) - t_dd * max(r_mid - half_w, 0.0)
+        r = radius * i / bands
+        r_mid = radius * (i - 0.5) / bands
         heat += (
             f'<circle cx="{cx}" cy="{cy}" r="{r * scale:.1f}" '
-            f'fill="{_heat_color(depth / max_depth)}" stroke="none"/>'
+            f'fill="{_heat_color(dead_depth(r_mid) / max_depth)}" stroke="none"/>'
         )
     heat += (
         f'<rect x="{cx - half_w * scale:.1f}" y="{cy - open_l / 2 * scale:.1f}" '
@@ -376,22 +381,23 @@ def live_dead(v):
     axo = _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, funnel_at_reach)
     return [
         ("Reclaim Section — Live & Dead", elevation, SCALE_CAPTION),
-        ("Plan — Live Column Depth", plan, "Darker is a deeper live column; red is the hopper opening"),
-        ("Axonometric — Dead Pile", axo, "The crater is the drawdown funnel; gray material is dead"),
+        ("Plan — Dead Pile Depth", plan, "Darker is deeper dead material; red is the hopper opening"),
+        ("Axonometric — Dead Pile (Cutaway)", axo, "Front half removed at the section plane; gray material is dead"),
     ]
 
 
 def _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, rim_z):
-    """3D-look view of what remains after gravity discharge: the dead pile
-    ringing the walls with the drawdown crater carved out of its middle.
-    Proportions come from the calculated geometry: the crater rim sits at
-    the channel reach radius, at the FUNNEL's height there (equal to the
-    product surface when the channel dies inside the pile; lower when the
-    channel reaches the stem wall and the dead pile is just corner wedges)."""
+    """Cutaway 3D-look view of what remains after gravity discharge: the
+    front half is sliced away at the section plane, exposing the dead
+    material as two cross-section wedges with the drawdown funnel emptied
+    all the way down to the opening between them. Proportions come from the
+    calculated geometry (crater rim at the channel reach radius, at the
+    funnel's height there)."""
     K = 0.35  # foreshortening for plan circles
     R, total = core["radius"], stem_wall + dome_height
     transition = core["transition_height"]
     reach = reclaim["channel_reach"]
+    half_w = open_w / 2
 
     s = min(95.0 / R, 140.0 / total)
     cx, ground = 150.0, 168.0
@@ -403,8 +409,8 @@ def _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, rim_z)
         return round(ground - z * s, 1)
 
     r_vis = R * s
+    base_ry = r_vis * K
     rim_rx, rim_ry = max(reach * s, 4.0), max(reach * s * K, 1.5)
-    rim_cy = Y(rim_z)
     # Dead height at the wall: the product contact height normally, but only
     # the funnel height when the channel reaches the wall itself.
     wall_top = min(transition, stem_wall)
@@ -412,35 +418,33 @@ def _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, rim_z)
         wall_top = min(wall_top, rim_z)
 
     body = ""
-    # Ground ellipse (front arc solid, back hidden by the pile).
+    # Back half of the floor ring.
     body += (
-        f'<path d="M{X(R)} {Y(0)} A{r_vis:.1f} {r_vis * K:.1f} 0 0 1 {X(-R)} {Y(0)}" '
-        f'{STRUCT_THIN}/>'
+        f'<path d="M{X(-R)} {Y(0)} A{r_vis:.1f} {base_ry:.1f} 0 0 1 {X(R)} {Y(0)}" '
+        'stroke="#aaa" stroke-width="1.2" fill="none"/>'
     )
-    # Dead body: up the left wall, in to the crater rim, around the rim's
-    # front arc, back out and down the right wall, closed by the ground front.
-    dead_path = (
-        f"M{X(-R)} {Y(0)} L{X(-R)} {Y(wall_top)} L{X(-reach)} {rim_cy} "
-        f"A{rim_rx:.1f} {rim_ry:.1f} 0 0 0 {X(reach)} {rim_cy} "
-        f"L{X(R)} {Y(wall_top)} L{X(R)} {Y(0)} "
-        f"A{r_vis:.1f} {r_vis * K:.1f} 0 0 1 {X(-R)} {Y(0)} Z"
-    )
-    body += f'<path d="{dead_path}" fill="#e2e2e2" stroke="#888" stroke-width="1.5" stroke-linejoin="round"/>'
-    # Crater: rim ellipse with a darker interior and the opening at its heart.
+    # Far wall of the funnel: back arc of the crater rim descending to the
+    # opening -- the surface the material slides down during discharge.
     body += (
-        f'<ellipse cx="{cx}" cy="{rim_cy}" rx="{rim_rx:.1f}" ry="{rim_ry:.1f}" '
-        'fill="#c3c3c3" stroke="#666" stroke-width="1.5"/>'
+        f'<path d="M{X(-reach)} {Y(rim_z)} A{rim_rx:.1f} {rim_ry:.1f} 0 0 1 {X(reach)} {Y(rim_z)} '
+        f'L{X(half_w)} {Y(0)} L{X(-half_w)} {Y(0)} Z" '
+        'fill="#cfcfcf" stroke="#8a8a8a" stroke-width="1" stroke-linejoin="round"/>'
     )
-    ow, ol = max(open_w * s, 3.0), max(open_l * s * K, 2.0)
+    # Cut-face wedges: the dead cross-section at the slice plane.
+    wedge = 'fill="#e0e0e0" stroke="#777" stroke-width="1.5" stroke-linejoin="round"'
     body += (
-        f'<rect x="{cx - ow / 2:.1f}" y="{rim_cy + rim_ry * 0.45 - ol / 2:.1f}" '
-        f'width="{ow:.1f}" height="{ol:.1f}" fill="#b03a2e"/>'
+        f'<path d="M{X(-R)} {Y(0)} L{X(-R)} {Y(wall_top)} L{X(-reach)} {Y(rim_z)} '
+        f'L{X(-half_w)} {Y(0)} Z" {wedge}/>'
     )
     body += (
-        f'<line x1="{X(-reach)}" y1="{rim_cy}" x2="{cx - ow / 2:.1f}" y2="{rim_cy + rim_ry * 0.45:.1f}" '
-        'stroke="#9a9a9a" stroke-width="1"/>'
-        f'<line x1="{X(reach)}" y1="{rim_cy}" x2="{cx + ow / 2:.1f}" y2="{rim_cy + rim_ry * 0.45:.1f}" '
-        'stroke="#9a9a9a" stroke-width="1"/>'
+        f'<path d="M{X(R)} {Y(0)} L{X(R)} {Y(wall_top)} L{X(reach)} {Y(rim_z)} '
+        f'L{X(half_w)} {Y(0)} Z" {wedge}/>'
+    )
+    # Slice line along the floor and the opening at the funnel's foot.
+    body += f'<line x1="{X(-R)}" y1="{Y(0)}" x2="{X(R)}" y2="{Y(0)}" stroke="#666" stroke-width="1"/>'
+    body += (
+        f'<rect x="{X(-half_w)}" y="{Y(0) - max(open_l * s * K, 2.0) / 2:.1f}" '
+        f'width="{max(open_w * s, 3.0):.1f}" height="{max(open_l * s * K, 2.0):.1f}" fill="#b03a2e"/>'
     )
     # Ghost of the dome shell for context.
     shell = " ".join(
@@ -452,8 +456,9 @@ def _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, rim_z)
         f'<line x1="{X(R)}" y1="{Y(0)}" x2="{X(R)}" y2="{Y(stem_wall)}" {DASHED}/>'
     )
     label = 'font-size="12" font-family="system-ui, sans-serif" font-weight="600" fill="#777"'
-    body += f'<text x="{X(-R * 0.62)}" y="{Y(wall_top * 0.35)}" text-anchor="middle" {label}>DEAD</text>'
-    body += f'<text x="{X(R * 0.62)}" y="{Y(wall_top * 0.35)}" text-anchor="middle" {label}>DEAD</text>'
+    mid_x = (R + max(reach, half_w)) / 2
+    body += f'<text x="{X(-mid_x * 0.92)}" y="{Y(wall_top * 0.22)}" text-anchor="middle" {label}>DEAD</text>'
+    body += f'<text x="{X(mid_x * 0.92)}" y="{Y(wall_top * 0.22)}" text-anchor="middle" {label}>DEAD</text>'
 
-    height_px = ground + r_vis * K + 14
+    height_px = ground + base_ry + 14
     return _svg(body, 300, height_px)
