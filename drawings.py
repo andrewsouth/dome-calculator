@@ -378,87 +378,85 @@ def live_dead(v):
     heat += f'<circle cx="{cx}" cy="{cy}" r="{radius * scale:.1f}" {STRUCT_THIN}/>'
     plan = _svg(heat, width, height_px)
 
-    axo = _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, funnel_at_reach)
+    axo = _dead_pile_iso(core, stem_wall, dome_height, surface, t_dd, openings, units)
     return [
         ("Reclaim Section — Live & Dead", elevation, SCALE_CAPTION),
         ("Plan — Dead Pile Depth", plan, "Darker is deeper dead material; red is the hopper opening"),
-        ("Axonometric — Dead Pile (Cutaway)", axo, "Front half removed at the section plane; gray material is dead"),
+        ("Isometric — Dead Pile Surface", axo, "Height-banded surface of the material left after drawdown; craters are the funnels"),
     ]
 
+def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units, n=36):
+    """Excel-style isometric surface plot of the dead pile left after
+    drawdown: the surface height min(channel, product surface) is sampled
+    on a grid, projected isometrically, and rendered as height-banded quads
+    painted back to front. The flat apron outside the dome is the floor
+    plane, and each hopper carves its own crater."""
+    R = core["radius"]
 
-def _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, rim_z):
-    """Cutaway 3D-look view of what remains after gravity discharge: the
-    front half is sliced away at the section plane, exposing the dead
-    material as two cross-section wedges with the drawdown funnel emptied
-    all the way down to the opening between them. Proportions come from the
-    calculated geometry (crater rim at the channel reach radius, at the
-    funnel's height there)."""
-    K = 0.35  # foreshortening for plan circles
-    R, total = core["radius"], stem_wall + dome_height
-    transition = core["transition_height"]
-    reach = reclaim["channel_reach"]
-    half_w = open_w / 2
+    def rect_distance(x, y, opening):
+        cx, cy, w, l = opening
+        return math.hypot(max(abs(x - cx) - w / 2, 0.0), max(abs(y - cy) - l / 2, 0.0))
 
-    s = min(95.0 / R, 140.0 / total)
-    cx, ground = 150.0, 168.0
+    def dead_z(x, y):
+        r = math.hypot(x, y)
+        if r > R:
+            return 0.0
+        channel = t_dd * min(rect_distance(x, y, o) for o in openings)
+        return max(0.0, min(channel, surface_fn(r)))
 
-    def X(x):
-        return round(cx + x * s, 1)
+    step = 2 * R / n
+    nodes = [[dead_z(-R + i * step, -R + j * step) for j in range(n + 1)] for i in range(n + 1)]
+    zmax = max(max(row) for row in nodes) or 1.0
 
-    def Y(z):
-        return round(ground - z * s, 1)
+    # Isometric projection: u = (x - y) cos30, v = (x + y) sin30 - z.
+    c30, s30 = 0.8660, 0.5
+    scale = 250.0 / (4 * R * c30)
+    z_scale = min(scale, 120.0 / zmax)
+    legend_h = 58
+    ox = 150.0
+    oy = legend_h + 14 + R * scale * 2 * s30 / 2 + zmax * z_scale
 
-    r_vis = R * s
-    base_ry = r_vis * K
-    rim_rx, rim_ry = max(reach * s, 4.0), max(reach * s * K, 1.5)
-    # Dead height at the wall: the product contact height normally, but only
-    # the funnel height when the channel reaches the wall itself.
-    wall_top = min(transition, stem_wall)
-    if reach >= R * 0.999:
-        wall_top = min(wall_top, rim_z)
+    def project(i, j):
+        x, y = -R + i * step, -R + j * step
+        z = nodes[i][j]
+        return (
+            round(ox + (x - y) * c30 * scale, 1),
+            round(oy + (x + y) * s30 * scale - z * z_scale, 1),
+        )
+
+    bands = [
+        ("#5b9bd5", "#41729f"),  # low
+        ("#ed7d31", "#b55a1d"),  # mid
+        ("#a5a5a5", "#7d7d7d"),  # high
+    ]
+
+    quads = []
+    for i in range(n):
+        for j in range(n):
+            mean_z = (nodes[i][j] + nodes[i + 1][j] + nodes[i][j + 1] + nodes[i + 1][j + 1]) / 4
+            band = min(int(mean_z / zmax * 3), 2)
+            depth = i + j  # larger = nearer the viewer; paint far first
+            quads.append((depth, i, j, band))
+    quads.sort(key=lambda q: q[0])
 
     body = ""
-    # Back half of the floor ring.
-    body += (
-        f'<path d="M{X(-R)} {Y(0)} A{r_vis:.1f} {base_ry:.1f} 0 0 1 {X(R)} {Y(0)}" '
-        'stroke="#aaa" stroke-width="1.2" fill="none"/>'
-    )
-    # Far wall of the funnel: back arc of the crater rim descending to the
-    # opening -- the surface the material slides down during discharge.
-    body += (
-        f'<path d="M{X(-reach)} {Y(rim_z)} A{rim_rx:.1f} {rim_ry:.1f} 0 0 1 {X(reach)} {Y(rim_z)} '
-        f'L{X(half_w)} {Y(0)} L{X(-half_w)} {Y(0)} Z" '
-        'fill="#cfcfcf" stroke="#8a8a8a" stroke-width="1" stroke-linejoin="round"/>'
-    )
-    # Cut-face wedges: the dead cross-section at the slice plane.
-    wedge = 'fill="#e0e0e0" stroke="#777" stroke-width="1.5" stroke-linejoin="round"'
-    body += (
-        f'<path d="M{X(-R)} {Y(0)} L{X(-R)} {Y(wall_top)} L{X(-reach)} {Y(rim_z)} '
-        f'L{X(-half_w)} {Y(0)} Z" {wedge}/>'
-    )
-    body += (
-        f'<path d="M{X(R)} {Y(0)} L{X(R)} {Y(wall_top)} L{X(reach)} {Y(rim_z)} '
-        f'L{X(half_w)} {Y(0)} Z" {wedge}/>'
-    )
-    # Slice line along the floor and the opening at the funnel's foot.
-    body += f'<line x1="{X(-R)}" y1="{Y(0)}" x2="{X(R)}" y2="{Y(0)}" stroke="#666" stroke-width="1"/>'
-    body += (
-        f'<rect x="{X(-half_w)}" y="{Y(0) - max(open_l * s * K, 2.0) / 2:.1f}" '
-        f'width="{max(open_w * s, 3.0):.1f}" height="{max(open_l * s * K, 2.0):.1f}" fill="#b03a2e"/>'
-    )
-    # Ghost of the dome shell for context.
-    shell = " ".join(
-        f"{X(x)},{Y(z)}" for x, z in _dome_profile_points(R, dome_height, stem_wall, segments=36)
-    )
-    body += f'<polyline points="{shell}" {DASHED}/>'
-    body += (
-        f'<line x1="{X(-R)}" y1="{Y(0)}" x2="{X(-R)}" y2="{Y(stem_wall)}" {DASHED}/>'
-        f'<line x1="{X(R)}" y1="{Y(0)}" x2="{X(R)}" y2="{Y(stem_wall)}" {DASHED}/>'
-    )
-    label = 'font-size="12" font-family="system-ui, sans-serif" font-weight="600" fill="#777"'
-    mid_x = (R + max(reach, half_w)) / 2
-    body += f'<text x="{X(-mid_x * 0.92)}" y="{Y(wall_top * 0.22)}" text-anchor="middle" {label}>DEAD</text>'
-    body += f'<text x="{X(mid_x * 0.92)}" y="{Y(wall_top * 0.22)}" text-anchor="middle" {label}>DEAD</text>'
+    for _depth, i, j, band in quads:
+        pts = f"{'%s,%s' % project(i, j)} {'%s,%s' % project(i + 1, j)} " \
+              f"{'%s,%s' % project(i + 1, j + 1)} {'%s,%s' % project(i, j + 1)}"
+        fill, edge = bands[band]
+        body += f'<polygon points="{pts}" fill="{fill}" stroke="{edge}" stroke-width="0.4"/>'
 
-    height_px = ground + base_ry + 14
+    # Legend: three height bands, highest first like the reference sheet.
+    legend = ""
+    for idx in range(2, -1, -1):
+        lo, hi = zmax * idx / 3, zmax * (idx + 1) / 3
+        y = 12 + (2 - idx) * 17
+        legend += f'<rect x="14" y="{y}" width="12" height="12" fill="{bands[idx][0]}"/>'
+        legend += (
+            f'<text x="32" y="{y + 10}" font-size="11" font-family="system-ui, sans-serif" '
+            f'fill="#555">{lo:,.1f}&#8211;{hi:,.1f} {units}</text>'
+        )
+    body += legend
+
+    height_px = oy + R * scale * 2 * s30 / 2 + 16
     return _svg(body, 300, height_px)
