@@ -54,3 +54,13 @@ source .venv/bin/activate
 pip install pytest
 python -m pytest
 ```
+
+## Deploying
+
+The repo carries a [render.yaml](render.yaml) blueprint (and a Procfile for
+other hosts). On [Render](https://render.com): sign in with GitHub, then
+**New → Blueprint**, pick this repo, and Apply. That creates a free web
+service running `gunicorn app:app`, auto-deploying every push to `main` —
+local development is unaffected; pushing ships the update in a minute or
+two. Free-tier note: the service sleeps when idle, so the first request
+after a quiet period takes ~30-60 s to wake.

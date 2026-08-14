@@ -1,0 +1,12 @@
+# Render blueprint: creates the web service when this repo is connected at
+# https://dashboard.render.com -> New -> Blueprint. Auto-deploys every push
+# to main, so local iteration continues unchanged -- push when ready to ship.
+services:
+  - type: web
+    name: dome-calculator
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+    healthCheckPath: /
+    autoDeploy: true
