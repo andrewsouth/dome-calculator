@@ -19,6 +19,9 @@ app = Flask(__name__)
 UNIT_CHOICES = ["ft", "in", "m", "mm"]
 DENSITY_UNIT_CHOICES = [("lbs/ft3", "lbs/ft³"), ("kg/m3", "kg/m³"), ("t/m3", "t/m³")]
 WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg", "kg"), ("bu", "bu")]
+# Length-unit conversion factors to meters, for converting entered values in
+# place when the user switches units on the dimensions step.
+UNIT_TO_M = {"ft": 0.3048, "in": 0.0254, "m": 1.0, "mm": 0.001}
 # Freeboard default depends on the selected length unit: 1.5 ft or 0.5 m.
 FREEBOARD_DEFAULTS = {"ft": 1.5, "in": 18.0, "m": 0.5, "mm": 500.0}
 
@@ -402,10 +405,10 @@ def index():
     shape = SHAPES[shape_key]
     errors = []
 
-    # Fresh arrival from step 2 has only shape+units in the URL; a Calculate
-    # submission carries the field values. Don't show results (or the scaled
-    # drawing) until the user has actually calculated at least once.
-    submitted = any(request.args.get(field["key"]) is not None for field in shape["fields"])
+    # Results (and the scaled drawings) appear only after Calculate has been
+    # pressed at least once -- the button submits go=1, which then persists
+    # through in-place unit switches via a hidden field.
+    submitted = request.args.get("go") == "1"
 
     values = {}
     for field in shape["fields"]:
@@ -426,6 +429,17 @@ def index():
                 except ValueError:
                     errors.append(f"'{raw}' is not a valid number for {field['label']}.")
                     values[key] = default
+
+    # In-place unit switch: convert already-entered lengths and volumes so
+    # the same physical structure is preserved under the new unit.
+    prev_units = request.args.get("prev_units")
+    if prev_units in UNIT_CHOICES and prev_units != units:
+        factor = UNIT_TO_M[prev_units] / UNIT_TO_M[units]
+        for field in shape["fields"]:
+            if field.get("unit") == "length":
+                values[field["key"]] *= factor
+            elif field.get("unit") == "volume":
+                values[field["key"]] *= factor ** 3
 
     values["units"] = units
 
@@ -465,6 +479,7 @@ def index():
         detail_results=detail_results,
         drawing=drawing,
         errors=errors,
+        submitted=submitted,
     )
 
 

@@ -64,11 +64,6 @@
         <span>{{ shapes[shape_key].label }}</span>
       </a>
       <a href="/">(change)</a>
-      {% if stage >= 3 %}
-        <span class="sep">&rsaquo;</span>
-        <span class="step">Units: {{ units }}</span>
-        <a href="/?shape={{ shape_key }}">(change)</a>
-      {% endif %}
     </div>
   {% endif %}
 
@@ -110,7 +105,16 @@
     </div>
     <form method="get" action="/">
       <input type="hidden" name="shape" value="{{ shape_key }}">
-      <input type="hidden" name="units" value="{{ units }}">
+      <input type="hidden" name="prev_units" value="{{ units }}">
+      {% if submitted %}<input type="hidden" name="go" value="1">{% endif %}
+      <div class="field">
+        <label for="units">Units</label>
+        <select id="units" name="units" onchange="this.form.submit()">
+          {% for unit in unit_choices %}
+            <option value="{{ unit }}" {% if unit == units %}selected{% endif %}>{{ unit }}</option>
+          {% endfor %}
+        </select>
+      </div>
       {% for field in shapes[shape_key].fields %}
         <div class="field">
           {% if field.kind == "select" %}
@@ -128,7 +132,7 @@
           {% endif %}
         </div>
       {% endfor %}
-      <button type="submit">Calculate</button>
+      <button type="submit" name="go" value="1">Calculate</button>
     </form>
 
     {% if errors %}
