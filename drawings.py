@@ -344,10 +344,18 @@ def live_dead(v):
     )
     body += f'<rect x="{x_px(-half_w)}" y="{y_px(0) - 3}" width="{(x_px(half_w) - x_px(-half_w)):.1f}" height="4" fill="#b03a2e"/>'
     body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
-    label = 'font-size="13" font-family="system-ui, sans-serif" font-weight="600"'
+    label = (
+        'font-size="13" font-family="system-ui, sans-serif" font-weight="600" '
+        'stroke="#fff" stroke-width="3" paint-order="stroke" stroke-linejoin="round"'
+    )
+    # DEAD sits just above the ground line, centered on each wedge's floor
+    # run (opening edge to wall) -- the one spot that stays inside the dead
+    # region regardless of the angles that shaped it.
+    dead_mid = (half_w + radius) / 2
+    dead_y = y_px(0) - 6
     body += f'<text x="{x_px(0)}" y="{y_px(apex * 0.35)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
-    body += f'<text x="{x_px(-radius * 0.72)}" y="{y_px(stem_wall * 0.3)}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
-    body += f'<text x="{x_px(radius * 0.72)}" y="{y_px(stem_wall * 0.3)}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
+    body += f'<text x="{x_px(-dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
+    body += f'<text x="{x_px(dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
     elevation = close(body)
 
     # Plan heatmap: concentric bands of DEAD pile depth (near-radial for a
