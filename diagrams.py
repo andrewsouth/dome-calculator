@@ -149,7 +149,7 @@ def _pile_with_angle_and_freeboard(apex_y=30, peak_y=45):
     )
     parts += _ext(66, 93.4, 112, 93.4)
     parts += f'<path d="M96 93.4 A 30 30 0 0 0 92 78.4" {DIM}/>'
-    parts += f'<text x="101" y="88" text-anchor="start" {TEXT}>Angle</text>'
+    parts += f'<text x="101" y="88" text-anchor="start" {TEXT}>Repose</text>'
     parts += _vdim(150, apex_y, peak_y, "", side=1)
     parts += f'<text x="150" y="{apex_y - 9}" text-anchor="middle" {TEXT}>Freeboard</text>'
     return parts
