@@ -22,7 +22,7 @@ app = Flask(__name__)
 
 UNIT_CHOICES = ["ft", "in", "m", "mm"]
 DENSITY_UNIT_CHOICES = [("lbs/ft3", "lbs/ft³"), ("kg/m3", "kg/m³"), ("t/m3", "t/m³")]
-WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg", "kg"), ("bu", "bu")]
+WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg", "kg")]
 # Density-unit conversion factors to kg/m3, for converting the density value
 # in place when its unit selector changes (75 lbs/ft3 should become 1.20 t/m3,
 # not be reinterpreted as 75 t/m3).
