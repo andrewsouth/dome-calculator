@@ -106,16 +106,36 @@ def _plan_view(scale, x_px, width, solid, outer_dashed=None, inner_dashed=None):
     return _svg(body, width, height)
 
 
-def _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px):
-    """Stem wall + spherical-cap arc with the true radius of curvature."""
+def _dome_profile_points(radius, dome_height, stem_wall, segments=48):
+    """Sampled points along the true spherical-cap curve (world coords).
+
+    Rendered as a polyline instead of an SVG arc: when a cap is at or near a
+    hemisphere the chord equals the arc diameter, and the 0.1px rounding of
+    arc parameters makes renderers visibly sag the curve. Sampling the true
+    circle keeps the shell consistent with everything computed from it."""
     curvature = (radius ** 2 + dome_height ** 2) / (2 * dome_height)
-    large = 1 if dome_height > radius else 0
+    center_y = stem_wall + dome_height - curvature
+    # Angle-uniform sampling: uniform-x chords sag visibly where the curve
+    # turns vertical (a hemisphere's edges); uniform angle keeps chord error
+    # below ~0.05 px at this size.
+    t_start = math.acos(max(-1.0, -radius / curvature))
+    t_end = math.acos(min(1.0, radius / curvature))
+    pts = []
+    for i in range(segments + 1):
+        t = t_start + (t_end - t_start) * i / segments
+        pts.append((curvature * math.cos(t), center_y + curvature * math.sin(t)))
+    return pts
+
+
+def _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px):
+    """Stem wall + spherical-cap profile."""
+    profile = " ".join(
+        f"{x_px(x)},{y_px(z)}" for x, z in _dome_profile_points(radius, dome_height, stem_wall)
+    )
     return (
         f'<line x1="{x_px(-radius)}" y1="{y_px(0)}" x2="{x_px(-radius)}" y2="{y_px(stem_wall)}" {STRUCT}/>'
         f'<line x1="{x_px(radius)}" y1="{y_px(0)}" x2="{x_px(radius)}" y2="{y_px(stem_wall)}" {STRUCT}/>'
-        f'<path d="M{x_px(-radius)} {y_px(stem_wall)} '
-        f'A {curvature * scale:.1f} {curvature * scale:.1f} 0 {large} 1 '
-        f'{x_px(radius)} {y_px(stem_wall)}" {STRUCT}/>'
+        f'<polyline points="{profile}" {STRUCT}/>'
     )
 
 
@@ -137,11 +157,15 @@ def spherical(v):
 def ellipsoid(v):
     radius, height, wall = v["diameter"] / 2, v["height"], v["stem_wall"]
     scale, x_px, y_px, close, width = _ground_shape_frame(radius, wall + height, v["units"])
+    profile = " ".join(
+        f"{x_px(radius * math.cos(math.pi * (1 - i / 48)))},"
+        f"{y_px(wall + height * math.sin(math.pi * (1 - i / 48)))}"
+        for i in range(49)
+    )
     body = (
         f'<line x1="{x_px(-radius)}" y1="{y_px(0)}" x2="{x_px(-radius)}" y2="{y_px(wall)}" {STRUCT}/>'
         f'<line x1="{x_px(radius)}" y1="{y_px(0)}" x2="{x_px(radius)}" y2="{y_px(wall)}" {STRUCT}/>'
-        f'<path d="M{x_px(-radius)} {y_px(wall)} '
-        f'A {radius * scale:.1f} {height * scale:.1f} 0 0 1 {x_px(radius)} {y_px(wall)}" {STRUCT}/>'
+        f'<polyline points="{profile}" {STRUCT}/>'
     )
     plan = _plan_view(scale, x_px, width, (radius, radius))
     return _dome_pair(close(body), plan)
@@ -305,12 +329,15 @@ def live_dead(v):
     scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
     body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
 
-    live_pts = [(-half_w, 0.0), (-reach, surface(reach))]
-    steps = 16
+    # Funnel walls rise from the opening edge; if the channel reaches the
+    # stem wall before meeting the surface, live extends up the wall itself.
+    funnel_at_reach = min(t_dd * max(reach - half_w, 0.0), surface(reach))
+    live_pts = [(-half_w, 0.0), (-reach, funnel_at_reach), (-reach, surface(reach))]
+    steps = 32
     for i in range(1, steps):
         x = -reach + (2 * reach) * i / steps
         live_pts.append((x, surface(abs(x))))
-    live_pts += [(reach, surface(reach)), (half_w, 0.0)]
+    live_pts += [(reach, surface(reach)), (reach, funnel_at_reach), (half_w, 0.0)]
     body += (
         f'<polygon points="{_polygon_str(live_pts, x_px, y_px)}" '
         'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
@@ -346,7 +373,87 @@ def live_dead(v):
     heat += f'<circle cx="{cx}" cy="{cy}" r="{radius * scale:.1f}" {STRUCT_THIN}/>'
     plan = _svg(heat, width, height_px)
 
+    axo = _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, funnel_at_reach)
     return [
         ("Reclaim Section — Live & Dead", elevation, SCALE_CAPTION),
         ("Plan — Live Column Depth", plan, "Darker is a deeper live column; red is the hopper opening"),
+        ("Axonometric — Dead Pile", axo, "The crater is the drawdown funnel; gray material is dead"),
     ]
+
+
+def _dead_pile_axo(core, reclaim, stem_wall, dome_height, open_w, open_l, rim_z):
+    """3D-look view of what remains after gravity discharge: the dead pile
+    ringing the walls with the drawdown crater carved out of its middle.
+    Proportions come from the calculated geometry: the crater rim sits at
+    the channel reach radius, at the FUNNEL's height there (equal to the
+    product surface when the channel dies inside the pile; lower when the
+    channel reaches the stem wall and the dead pile is just corner wedges)."""
+    K = 0.35  # foreshortening for plan circles
+    R, total = core["radius"], stem_wall + dome_height
+    transition = core["transition_height"]
+    reach = reclaim["channel_reach"]
+
+    s = min(95.0 / R, 140.0 / total)
+    cx, ground = 150.0, 168.0
+
+    def X(x):
+        return round(cx + x * s, 1)
+
+    def Y(z):
+        return round(ground - z * s, 1)
+
+    r_vis = R * s
+    rim_rx, rim_ry = max(reach * s, 4.0), max(reach * s * K, 1.5)
+    rim_cy = Y(rim_z)
+    # Dead height at the wall: the product contact height normally, but only
+    # the funnel height when the channel reaches the wall itself.
+    wall_top = min(transition, stem_wall)
+    if reach >= R * 0.999:
+        wall_top = min(wall_top, rim_z)
+
+    body = ""
+    # Ground ellipse (front arc solid, back hidden by the pile).
+    body += (
+        f'<path d="M{X(R)} {Y(0)} A{r_vis:.1f} {r_vis * K:.1f} 0 0 1 {X(-R)} {Y(0)}" '
+        f'{STRUCT_THIN}/>'
+    )
+    # Dead body: up the left wall, in to the crater rim, around the rim's
+    # front arc, back out and down the right wall, closed by the ground front.
+    dead_path = (
+        f"M{X(-R)} {Y(0)} L{X(-R)} {Y(wall_top)} L{X(-reach)} {rim_cy} "
+        f"A{rim_rx:.1f} {rim_ry:.1f} 0 0 0 {X(reach)} {rim_cy} "
+        f"L{X(R)} {Y(wall_top)} L{X(R)} {Y(0)} "
+        f"A{r_vis:.1f} {r_vis * K:.1f} 0 0 1 {X(-R)} {Y(0)} Z"
+    )
+    body += f'<path d="{dead_path}" fill="#e2e2e2" stroke="#888" stroke-width="1.5" stroke-linejoin="round"/>'
+    # Crater: rim ellipse with a darker interior and the opening at its heart.
+    body += (
+        f'<ellipse cx="{cx}" cy="{rim_cy}" rx="{rim_rx:.1f}" ry="{rim_ry:.1f}" '
+        'fill="#c3c3c3" stroke="#666" stroke-width="1.5"/>'
+    )
+    ow, ol = max(open_w * s, 3.0), max(open_l * s * K, 2.0)
+    body += (
+        f'<rect x="{cx - ow / 2:.1f}" y="{rim_cy + rim_ry * 0.45 - ol / 2:.1f}" '
+        f'width="{ow:.1f}" height="{ol:.1f}" fill="#b03a2e"/>'
+    )
+    body += (
+        f'<line x1="{X(-reach)}" y1="{rim_cy}" x2="{cx - ow / 2:.1f}" y2="{rim_cy + rim_ry * 0.45:.1f}" '
+        'stroke="#9a9a9a" stroke-width="1"/>'
+        f'<line x1="{X(reach)}" y1="{rim_cy}" x2="{cx + ow / 2:.1f}" y2="{rim_cy + rim_ry * 0.45:.1f}" '
+        'stroke="#9a9a9a" stroke-width="1"/>'
+    )
+    # Ghost of the dome shell for context.
+    shell = " ".join(
+        f"{X(x)},{Y(z)}" for x, z in _dome_profile_points(R, dome_height, stem_wall, segments=36)
+    )
+    body += f'<polyline points="{shell}" {DASHED}/>'
+    body += (
+        f'<line x1="{X(-R)}" y1="{Y(0)}" x2="{X(-R)}" y2="{Y(stem_wall)}" {DASHED}/>'
+        f'<line x1="{X(R)}" y1="{Y(0)}" x2="{X(R)}" y2="{Y(stem_wall)}" {DASHED}/>'
+    )
+    label = 'font-size="12" font-family="system-ui, sans-serif" font-weight="600" fill="#777"'
+    body += f'<text x="{X(-R * 0.62)}" y="{Y(wall_top * 0.35)}" text-anchor="middle" {label}>DEAD</text>'
+    body += f'<text x="{X(R * 0.62)}" y="{Y(wall_top * 0.35)}" text-anchor="middle" {label}>DEAD</text>'
+
+    height_px = ground + r_vis * K + 14
+    return _svg(body, 300, height_px)
