@@ -405,7 +405,7 @@ def test_live_dead_storage_sections_include_check_and_sensitivity():
         diameter=66.0, dome_height=33.0, stem_wall=59.0, repose_deg=37.0,
         drawdown_deg=70.0, density=100.0, density_unit="lbs/ft3",
         length_unit="ft", freeboard=2.0, opening_width=5.0, opening_length=5.0,
-        required_live=75000.0,
+        required_live=60.0,  # required live share, percent
     )
     titles = [title for title, _rows in sections]
     assert any(title.startswith("Reclaim") for title in titles)

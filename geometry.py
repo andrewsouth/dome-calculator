@@ -764,11 +764,12 @@ def live_dead_storage(
     sections.insert(1, (f"Reclaim — {opening_label}", reclaim_rows))
 
     if required_live > 0:
-        margin = (reclaim["live_volume"] - required_live) / required_live * 100
+        # required_live is a required LIVE SHARE in percent of stored volume.
+        provided_share = reclaim["live_share"] * 100
         sections.insert(2, ("Live Storage Check", [
-            ("Required", required_live, 3),
-            ("Provided", reclaim["live_volume"], 3),
-            ("Margin", margin, "%"),
+            ("Required Live Share", required_live, "%"),
+            ("Provided Live Share", provided_share, "%"),
+            ("Margin", provided_share - required_live, "%"),
         ]))
 
     # Opening size sensitivity: what a larger or longer opening recovers.

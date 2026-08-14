@@ -185,8 +185,8 @@ def _validate_live_dead(v):
         errors.append("Opening dimensions must be greater than 0.")
     elif v["opening_w"] >= v["diameter"] or v["opening_l"] >= v["diameter"]:
         errors.append("Opening must be smaller than the dome diameter.")
-    if v["required_live"] < 0:
-        errors.append("Required live volume cannot be negative.")
+    if not (0 <= v["required_live"] < 100):
+        errors.append("Required live must be a percentage from 0 to less than 100.")
     return errors
 
 
@@ -346,13 +346,13 @@ SHAPES = {
             number_field("height", "Height", 30.0),
             number_field("stem_wall", "Stem Wall", 30.0),
             plain_number_field("angle", "Angle of Repose", 25.0, "°"),
-            plain_number_field("drawdown", "Angle of Drawdown", 30.0, "°"),
+            plain_number_field("drawdown", "Drawdown Angle", 30.0, "°"),
             plain_number_field("density", "Density", 75.0),
             select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
             number_field("opening_w", "Opening Width", 5.0),
             number_field("opening_l", "Opening Length", 5.0),
-            volume_field("required_live", "Required Live (0 = skip)", 0.0),
+            plain_number_field("required_live", "Required Live (0 = skip)", 0.0, "%"),
         ],
         "validate": _validate_live_dead,
         "compute": lambda v: live_dead_storage(
