@@ -19,6 +19,10 @@ app = Flask(__name__)
 UNIT_CHOICES = ["ft", "in", "m", "mm"]
 DENSITY_UNIT_CHOICES = [("lbs/ft3", "lbs/ft³"), ("kg/m3", "kg/m³"), ("t/m3", "t/m³")]
 WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg", "kg"), ("bu", "bu")]
+# Density-unit conversion factors to kg/m3, for converting the density value
+# in place when its unit selector changes (75 lbs/ft3 should become 1.20 t/m3,
+# not be reinterpreted as 75 t/m3).
+DENSITY_TO_KG_M3 = {"lbs/ft3": 16.018463, "kg/m3": 1.0, "t/m3": 1000.0}
 # Length-unit conversion factors to meters, for converting entered values in
 # place when the user switches units on the dimensions step.
 UNIT_TO_M = {"ft": 0.3048, "in": 0.0254, "m": 1.0, "mm": 0.001}
@@ -38,8 +42,11 @@ def volume_field(key, label, default):
     return {"key": key, "label": label, "default": default, "kind": "number", "unit": "volume"}
 
 
-def select_field(key, label, default, choices):
-    return {"key": key, "label": label, "default": default, "kind": "select", "choices": choices}
+def select_field(key, label, default, choices, convert=False):
+    """A dropdown field; convert=True marks unit selectors whose change
+    should convert the paired value in place (handled in the route)."""
+    return {"key": key, "label": label, "default": default, "kind": "select",
+            "choices": choices, "convert": convert}
 
 
 _ICON_STROKE = 'stroke="#444" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
@@ -296,7 +303,7 @@ SHAPES = {
             number_field("stem_wall", "Stem Wall", 36.0),
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
-            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
+            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
         ],
         "validate": _validate_dry_bulk_calculator,
@@ -317,7 +324,7 @@ SHAPES = {
         "fields": [
             plain_number_field("angle", "Angle of Repose", 32.0, "°"),
             plain_number_field("density", "Density", 50.0),
-            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
+            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
             plain_number_field("capacity", "Capacity", 10000.0),
             select_field("weight_unit", "Capacity Unit", "ton", WEIGHT_UNIT_CHOICES),
             number_field("stem_wall", "Stem Wall", 16.0),
@@ -348,7 +355,7 @@ SHAPES = {
             plain_number_field("angle", "Angle of Repose", 25.0, "°"),
             plain_number_field("drawdown", "Drawdown Angle", 30.0, "°"),
             plain_number_field("density", "Density", 75.0),
-            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES),
+            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
             number_field("opening_w", "Opening Width", 5.0),
             number_field("opening_l", "Opening Length", 5.0),
@@ -429,6 +436,18 @@ def index():
                 except ValueError:
                     errors.append(f"'{raw}' is not a valid number for {field['label']}.")
                     values[key] = default
+
+    # In-place density-unit switch: convert the density value so the same
+    # physical material is preserved under the new unit.
+    prev_density_unit = request.args.get("prev_density_unit")
+    if (
+        "density" in values and "density_unit" in values
+        and prev_density_unit in DENSITY_TO_KG_M3
+        and prev_density_unit != values["density_unit"]
+    ):
+        values["density"] *= (
+            DENSITY_TO_KG_M3[prev_density_unit] / DENSITY_TO_KG_M3[values["density_unit"]]
+        )
 
     # In-place unit switch: convert already-entered lengths and volumes so
     # the same physical structure is preserved under the new unit.
