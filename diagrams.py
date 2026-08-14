@@ -166,21 +166,36 @@ def dry_bulk_calculator():
 
 
 def live_dead():
-    """Bulk calculator schematic plus the reclaim inputs: a hopper opening in
-    the floor and the drawdown funnel rising from its edges. The funnel lines
-    from (145,158)/(155,158) at ~70 degrees meet the 30-degree pile surface
-    at (111.9, 67.1) and (188.1, 67.1)."""
+    """Reclaim schematic drawn at instructional angles: a 25-degree pile
+    surface (peak (150,45), contacting the r=88 inner shell at (70.6,82) /
+    (229.4,82)) and a 30-degree drawdown funnel from the hopper opening,
+    which at these angles reaches the shell at (62.5,110.4) / (237.5,110.4)
+    -- leaving thin dead wedges at the wall corners."""
     body = _dome_structure(HEMI_ARC)
-    body += _pile_with_angle_and_freeboard()
+    # Pile at 25-degree repose.
     body += (
-        '<polygon points="145,158 111.9,67.1 150,45 188.1,67.1 155,158" '
+        '<path d="M62 158 L62 120 A88 88 0 0 1 70.6 82 L150 45 L229.4 82 '
+        'A88 88 0 0 1 238 120 L238 158 Z" fill="#ddd" stroke="#666" stroke-width="1"/>'
+    )
+    # Live channel: 30-degree funnel walls from the opening edges, along the
+    # shell shoulders, capped by the pile surface.
+    body += (
+        '<path d="M145 158 L62.5 110.4 A88 88 0 0 1 70.6 82 L150 45 L229.4 82 '
+        'A88 88 0 0 1 237.5 110.4 L155 158 Z" '
         'fill="#b5cbe8" fill-opacity="0.75" stroke="#44608c" stroke-width="1.5" stroke-linejoin="round"/>'
     )
     body += '<rect x="144" y="155" width="12" height="5" fill="#b03a2e"/>'
-    body += f'<text x="163" y="152" text-anchor="start" {TEXT}>Opening</text>'
-    body += _ext(165, 130, 205, 130)
-    body += f'<path d="M185 130 A 20 20 0 0 0 171.8 111.2" {DIM}/>'
-    body += f'<text x="190" y="120" text-anchor="start" {TEXT}>Drawdown</text>'
+    body += f'<text x="163" y="150" text-anchor="start" {TEXT}>Opening</text>'
+    # Repose angle at the left shell contact.
+    body += _ext(70.6, 82, 116, 82)
+    body += f'<path d="M100.6 82 A 30 30 0 0 0 97.8 69.3" {DIM}/>'
+    body += f'<text x="105" y="77" text-anchor="start" {TEXT}>Angle</text>'
+    # Drawdown angle on the right funnel wall.
+    body += _ext(190, 137.8, 230, 137.8)
+    body += f'<path d="M210 137.8 A 20 20 0 0 0 207.3 127.8" {DIM}/>'
+    body += f'<text x="214" y="131" text-anchor="start" {TEXT}>Drawdown</text>'
+    body += _vdim(150, 30, 45, "", side=1)
+    body += f'<text x="150" y="21" text-anchor="middle" {TEXT}>Freeboard</text>'
     body += _hdim(60, 240, 180, "Diameter")
     body += _ext(43, 120, 257, 120) + _ext(150, 30, 257, 30)
     body += _vdim(257, 30, 120, "Height")
