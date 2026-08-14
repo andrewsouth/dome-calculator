@@ -352,7 +352,7 @@ SHAPES = {
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
             number_field("opening_w", "Opening Width", 5.0),
             number_field("opening_l", "Opening Length", 5.0),
-            plain_number_field("required_live", "Required Live (0 = skip)", 0.0, "%"),
+            plain_number_field("required_live", "Required Live", 0.0, "%"),
         ],
         "validate": _validate_live_dead,
         "compute": lambda v: live_dead_storage(
