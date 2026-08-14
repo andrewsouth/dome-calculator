@@ -493,7 +493,6 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
     radius, R = core["radius"], core["radius_of_curvature"]
 
     mass_unit_label = "ton" if length_unit in ("ft", "in") else "tonne"
-    show_bushels = length_unit in ("ft", "in") and density_unit == "lbs/ft3"
 
     def capacity_row(volume_native):
         mass_kg = _mass_kg(volume_native, length_unit, density, density_unit)
@@ -506,8 +505,6 @@ def dry_bulk_storage_dome(diameter, height, stem_wall, angle_degrees, density, d
         ("Volume", core["product_volume"], 3),
         capacity_row(core["product_volume"]),
     ]
-    if show_bushels:
-        product_rows.append(("Bushels", core["product_volume"] / BU_TO_FT3, "bu"))
 
     cone_rows = [
         ("Above Floor", core["transition_height"], 1),

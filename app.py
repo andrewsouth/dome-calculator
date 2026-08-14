@@ -4,6 +4,10 @@ import diagrams
 import drawings
 import iso
 from geometry import (
+    BU_TO_FT3,
+    FT3_TO_M3,
+    LB_TO_KG,
+    US_TON_TO_KG,
     dry_bulk_storage_dome,
     live_dead_storage,
     dry_bulk_storage_sizer,
@@ -23,6 +27,11 @@ WEIGHT_UNIT_CHOICES = [("ton", "ton"), ("lbs", "lbs"), ("tonne", "tonne"), ("kg"
 # in place when its unit selector changes (75 lbs/ft3 should become 1.20 t/m3,
 # not be reinterpreted as 75 t/m3).
 DENSITY_TO_KG_M3 = {"lbs/ft3": 16.018463, "kg/m3": 1.0, "t/m3": 1000.0}
+# Weight-unit conversion for the capacity value. Mass units convert to kg
+# directly; bushels are a volume measure, so bu conversions route through the
+# form's current density.
+WEIGHT_TO_KG = {"lbs": LB_TO_KG, "ton": US_TON_TO_KG, "kg": 1.0, "tonne": 1000.0}
+BU_M3 = BU_TO_FT3 * FT3_TO_M3
 # Length-unit conversion factors to meters, for converting entered values in
 # place when the user switches units on the dimensions step.
 UNIT_TO_M = {"ft": 0.3048, "in": 0.0254, "m": 1.0, "mm": 0.001}
@@ -326,7 +335,7 @@ SHAPES = {
             plain_number_field("density", "Density", 50.0),
             select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
             plain_number_field("capacity", "Capacity", 10000.0),
-            select_field("weight_unit", "Capacity Unit", "ton", WEIGHT_UNIT_CHOICES),
+            select_field("weight_unit", "Capacity Unit", "ton", WEIGHT_UNIT_CHOICES, convert=True),
             number_field("stem_wall", "Stem Wall", 16.0),
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
         ],
@@ -448,6 +457,25 @@ def index():
         values["density"] *= (
             DENSITY_TO_KG_M3[prev_density_unit] / DENSITY_TO_KG_M3[values["density_unit"]]
         )
+
+    # In-place capacity-unit switch: convert the capacity value so the same
+    # physical amount of product is preserved under the new unit.
+    prev_weight_unit = request.args.get("prev_weight_unit")
+    if (
+        "capacity" in values and "weight_unit" in values
+        and prev_weight_unit in (list(WEIGHT_TO_KG) + ["bu"])
+        and prev_weight_unit != values["weight_unit"]
+        and values.get("density", 0) > 0
+    ):
+        density_kg_m3 = values["density"] * DENSITY_TO_KG_M3[values["density_unit"]]
+        if prev_weight_unit == "bu":
+            mass_kg = values["capacity"] * BU_M3 * density_kg_m3
+        else:
+            mass_kg = values["capacity"] * WEIGHT_TO_KG[prev_weight_unit]
+        if values["weight_unit"] == "bu":
+            values["capacity"] = mass_kg / density_kg_m3 / BU_M3
+        else:
+            values["capacity"] = mass_kg / WEIGHT_TO_KG[values["weight_unit"]]
 
     # In-place unit switch: convert already-entered lengths and volumes so
     # the same physical structure is preserved under the new unit.
