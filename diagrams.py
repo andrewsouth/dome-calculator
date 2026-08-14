@@ -189,10 +189,12 @@ def live_dead():
     body += _ext(70.6, 82, 116, 82)
     body += f'<path d="M100.6 82 A 30 30 0 0 0 97.8 69.3" {DIM}/>'
     body += f'<text x="105" y="77" text-anchor="start" {TEXT}>Repose</text>'
-    # Drawdown angle on the right funnel wall, near the opening.
-    body += _ext(175, 146.5, 215, 146.5)
-    body += f'<path d="M195 146.5 A 20 20 0 0 0 192.3 136.5" {DIM}/>'
-    body += f'<text x="199" y="140" text-anchor="start" {TEXT}>Drawdown</text>'
+    # Drawdown: the angle between the funnel wall and the FLOOR, measured at
+    # the vertex where the slope lands at the opening's edge (155,158). The
+    # arc sweeps from the floor line up to the 30-degree wall.
+    body += _ext(155, 158, 208, 158)
+    body += f'<path d="M183 158 A 28 28 0 0 0 179.2 144" {DIM}/>'
+    body += f'<text x="188" y="149" text-anchor="start" {TEXT}>Drawdown</text>'
     body += _vdim(150, 30, 45, "", side=1)
     body += f'<text x="150" y="21" text-anchor="middle" {TEXT}>Freeboard</text>'
     body += _hdim(60, 240, 180, "Diameter")
