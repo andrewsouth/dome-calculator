@@ -303,7 +303,7 @@ SHAPES = {
         ),
     },
     "dry_bulk_sizer": {
-        "label": "Bulk Product Storage Sizer",
+        "label": "Product Storage Sizer",
         "category": "storage",
         "detail_prefixes": ["Cone @", "Portion above cone", "Frustum below cone", "Dome:", "Stem Wall:"],
         "diagram": diagrams.dry_bulk_sizer(),
@@ -327,7 +327,7 @@ SHAPES = {
         ),
     },
     "live_dead": {
-        "label": "Live & Dead Storage",
+        "label": "Live vs. Dead Storage",
         "category": "storage",
         "detail_prefixes": [
             "Cone @", "Portion above cone", "Frustum below cone",

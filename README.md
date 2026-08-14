@@ -19,11 +19,11 @@ verified against the reference site's published examples:
   the structure, partly forming a freestanding cone under the dome ceiling)
   and the resulting storage capacity. An optional Freeboard input holds the
   pile's peak a deliberate clearance below the dome's apex.
-- **Bulk Product Storage Sizer** — the inverse problem: given a target
+- **Product Storage Sizer** — the inverse problem: given a target
   capacity, angle of repose, and stem wall height, solves via numerical
   root-finding for the hemisphere dome size needed to store it (also
   supports Freeboard)
-- **Live & Dead Storage** — reclaim geometry: gravity discharge through a
+- **Live vs. Dead Storage** — reclaim geometry: gravity discharge through a
   floor hopper opening develops a funnel-flow channel at the drawdown
   angle; material inside the channel is live (flows on its own), the rest
   is dead. Outputs live/dead volume and mass, live share, an optional
