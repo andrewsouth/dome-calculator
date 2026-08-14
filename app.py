@@ -186,7 +186,7 @@ def _validate_live_dead(v):
     elif v["opening_w"] >= v["diameter"] or v["opening_l"] >= v["diameter"]:
         errors.append("Opening must be smaller than the dome diameter.")
     if not (0 <= v["required_live"] < 100):
-        errors.append("Required live must be a percentage from 0 to less than 100.")
+        errors.append("Target live must be a percentage from 0 to less than 100.")
     return errors
 
 
@@ -352,7 +352,7 @@ SHAPES = {
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
             number_field("opening_w", "Opening Width", 5.0),
             number_field("opening_l", "Opening Length", 5.0),
-            plain_number_field("required_live", "Required Live", 0.0, "%"),
+            plain_number_field("required_live", "Target Live", 0.0, "%"),
         ],
         "validate": _validate_live_dead,
         "compute": lambda v: live_dead_storage(

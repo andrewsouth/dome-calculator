@@ -767,7 +767,7 @@ def live_dead_storage(
         # required_live is a required LIVE SHARE in percent of stored volume.
         provided_share = reclaim["live_share"] * 100
         sections.insert(2, ("Live Storage Check", [
-            ("Required Live Share", required_live, "%"),
+            ("Target Live Share", required_live, "%"),
             ("Provided Live Share", provided_share, "%"),
             ("Margin", provided_share - required_live, "%"),
         ]))
