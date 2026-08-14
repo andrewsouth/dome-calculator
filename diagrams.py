@@ -185,15 +185,14 @@ def live_dead():
         'fill="#b5cbe8" fill-opacity="0.75" stroke="#44608c" stroke-width="1.5" stroke-linejoin="round"/>'
     )
     body += '<rect x="144" y="155" width="12" height="5" fill="#b03a2e"/>'
-    body += f'<text x="163" y="150" text-anchor="start" {TEXT}>Opening</text>'
     # Repose angle at the left shell contact.
     body += _ext(70.6, 82, 116, 82)
     body += f'<path d="M100.6 82 A 30 30 0 0 0 97.8 69.3" {DIM}/>'
-    body += f'<text x="105" y="77" text-anchor="start" {TEXT}>Angle</text>'
-    # Drawdown angle on the right funnel wall.
-    body += _ext(190, 137.8, 230, 137.8)
-    body += f'<path d="M210 137.8 A 20 20 0 0 0 207.3 127.8" {DIM}/>'
-    body += f'<text x="214" y="131" text-anchor="start" {TEXT}>Drawdown</text>'
+    body += f'<text x="105" y="77" text-anchor="start" {TEXT}>Repose</text>'
+    # Drawdown angle on the right funnel wall, near the opening.
+    body += _ext(175, 146.5, 215, 146.5)
+    body += f'<path d="M195 146.5 A 20 20 0 0 0 192.3 136.5" {DIM}/>'
+    body += f'<text x="199" y="140" text-anchor="start" {TEXT}>Drawdown</text>'
     body += _vdim(150, 30, 45, "", side=1)
     body += f'<text x="150" y="21" text-anchor="middle" {TEXT}>Freeboard</text>'
     body += _hdim(60, 240, 180, "Diameter")
