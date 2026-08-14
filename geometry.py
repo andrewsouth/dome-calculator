@@ -772,15 +772,4 @@ def live_dead_storage(
             ("Margin", provided_share - required_live, "%"),
         ]))
 
-    # Opening size sensitivity: what a larger or longer opening recovers.
-    sensitivity_rows = []
-    for w_mult, l_mult in ((1.0, 1.0), (1.2, 1.2), (1.6, 1.6), (1.0, 2.0), (1.0, 4.0)):
-        w, l = opening_width * w_mult, opening_length * l_mult
-        variant = live_dead_reclaim(
-            diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard,
-            [(0.0, 0.0, w, l)], samples=200,
-        )
-        sensitivity_rows.append((f"{w:,.2f} × {l:,.2f} {length_unit}", variant["live_volume"], 3))
-    sections.append(("Opening Size Sensitivity — Live Volume", sensitivity_rows))
-
     return sections

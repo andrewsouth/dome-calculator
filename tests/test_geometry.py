@@ -398,7 +398,7 @@ def test_live_dead_multiple_openings_union_beats_single():
     )
 
 
-def test_live_dead_storage_sections_include_check_and_sensitivity():
+def test_live_dead_storage_sections_include_check():
     from geometry import live_dead_storage
 
     sections = live_dead_storage(
@@ -410,7 +410,6 @@ def test_live_dead_storage_sections_include_check_and_sensitivity():
     titles = [title for title, _rows in sections]
     assert any(title.startswith("Reclaim") for title in titles)
     assert "Live Storage Check" in titles
-    assert any(title.startswith("Opening Size Sensitivity") for title in titles)
 
     reclaim_rows = _section_starting_with(sections, "Reclaim")
     live = _value(reclaim_rows, "Live Volume")

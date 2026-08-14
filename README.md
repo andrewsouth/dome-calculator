@@ -26,9 +26,9 @@ verified against the reference site's published examples:
 - **Live vs. Dead Storage** — reclaim geometry: gravity discharge through a
   floor hopper opening develops a funnel-flow channel at the drawdown
   angle; material inside the channel is live (flows on its own), the rest
-  is dead. Outputs live/dead volume and mass, live share, an optional
-  required-live check with margin, and an opening-size sensitivity table,
-  plus a shaded live/dead section and a plan heatmap of live column depth.
+  is dead. Outputs live/dead volume and mass, live share, and an optional
+  required-live-share check with margin, plus a shaded live/dead section,
+  a plan heatmap of dead pile depth, and an isometric dead-pile surface.
   The engine accepts multiple hopper openings (inline rows, multiple
   tunnels); the UI currently exposes a single centered opening.
 
