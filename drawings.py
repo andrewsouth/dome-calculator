@@ -11,7 +11,12 @@ Each draw function returns a list of (title, svg, caption) boxes.
 
 import math
 
-from geometry import dry_bulk_geometry, live_dead_reclaim, solve_dry_bulk_dome_radius
+from geometry import (
+    dry_bulk_geometry,
+    hopper_layout,
+    live_dead_reclaim,
+    solve_dry_bulk_dome_radius,
+)
 
 STRUCT = 'stroke="#333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"'
 STRUCT_THIN = 'stroke="#333" stroke-width="1.8" fill="none"'
@@ -306,16 +311,18 @@ def live_dead(v):
     diameter, dome_height, stem_wall = v["diameter"], v["height"], v["stem_wall"]
     repose, drawdown, freeboard = v["angle"], v["drawdown"], v["freeboard"]
     open_w, open_l, units = v["opening_w"], v["opening_l"], v["units"]
+    hoppers, tunnels = int(v.get("hoppers", 1)), int(v.get("tunnels", 1))
+    hopper_spacing = v.get("hopper_spacing", 0.0)
+    tunnel_spacing = v.get("tunnel_spacing", 0.0)
 
-    openings = [(0.0, 0.0, open_w, open_l)]
+    openings = hopper_layout(open_w, open_l, hoppers, hopper_spacing, tunnels, tunnel_spacing)
     reclaim = live_dead_reclaim(
         diameter, dome_height, stem_wall, repose, drawdown, freeboard, openings, samples=120
     )
     core = reclaim["core"]
     radius, total = core["radius"], stem_wall + dome_height
-    apex, reach = core["pile_apex_height"], reclaim["channel_reach"]
+    apex = core["pile_apex_height"]
     t_dd = math.tan(math.radians(drawdown))
-    half_w = open_w / 2
 
     def surface(r):
         if r <= core["cone_radius"]:
@@ -324,72 +331,160 @@ def live_dead(v):
         center_y = stem_wall + dome_height - core["radius_of_curvature"]
         return min(total, center_y + math.sqrt(max(core["radius_of_curvature"] ** 2 - r ** 2, 0.0)))
 
-    # Section: gray pile, blue live channel (funnel walls up from the opening
-    # edges, capped by the product surface sampled to the channel reach).
+    def channel_at(x, y):
+        return t_dd * min(
+            math.hypot(max(abs(x - cx) - w / 2, 0.0), max(abs(y - cy) - l / 2, 0.0))
+            for cx, cy, w, l in openings
+        )
+
+    # Section: gray pile, blue live channels. The cut runs along a tunnel
+    # line (the center tunnel, or the first tunnel off-center when the
+    # tunnel count is even), so every hopper in that tunnel shows its
+    # funnel; adjacent funnels merge where the channel stays below the
+    # product surface between openings.
+    y_cut = 0.0 if tunnels % 2 else tunnel_spacing / 2
     scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
     body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
 
-    # Funnel walls rise from the opening edge; if the channel reaches the
-    # stem wall before meeting the surface, live extends up the wall itself.
-    funnel_at_reach = min(t_dd * max(reach - half_w, 0.0), surface(reach))
-    live_pts = [(-half_w, 0.0), (-reach, funnel_at_reach), (-reach, surface(reach))]
-    steps = 32
-    for i in range(1, steps):
-        x = -reach + (2 * reach) * i / steps
-        live_pts.append((x, surface(abs(x))))
-    live_pts += [(reach, surface(reach)), (reach, funnel_at_reach), (half_w, 0.0)]
-    body += (
-        f'<polygon points="{_polygon_str(live_pts, x_px, y_px)}" '
-        'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
-    )
-    body += f'<rect x="{x_px(-half_w)}" y="{y_px(0) - 3}" width="{(x_px(half_w) - x_px(-half_w)):.1f}" height="4" fill="#b03a2e"/>'
+    # Sample the channel surface along the cut and collect the contiguous
+    # runs where product stands above it: each run is one live region,
+    # bounded above by the product surface and below by the channel
+    # (clipped to the surface, so wall run-ups close cleanly).
+    n_sec = 360
+    tiny = total * 1e-6
+    runs, current = [], []
+    for i in range(n_sec + 1):
+        x = -radius + 2 * radius * i / n_sec
+        if surface(abs(x)) - channel_at(x, y_cut) > tiny:
+            current.append(x)
+        elif current:
+            runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+
+    for run in runs:
+        pts = [(x, surface(abs(x))) for x in run]
+        pts += [(x, min(channel_at(x, y_cut), surface(abs(x)))) for x in reversed(run)]
+        body += (
+            f'<polygon points="{_polygon_str(pts, x_px, y_px)}" '
+            'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
+        )
+
+    # Red opening marks: every hopper the cut passes through.
+    for cx, cy, w, l in openings:
+        if abs(y_cut - cy) <= l / 2:
+            body += (
+                f'<rect x="{x_px(cx - w / 2)}" y="{y_px(0) - 3}" '
+                f'width="{(x_px(cx + w / 2) - x_px(cx - w / 2)):.1f}" height="4" fill="#b03a2e"/>'
+            )
     body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
     label = (
         'font-size="13" font-family="system-ui, sans-serif" font-weight="600" '
         'stroke="#fff" stroke-width="3" paint-order="stroke" stroke-linejoin="round"'
     )
-    # DEAD sits just above the ground line, centered on each wedge's floor
-    # run (opening edge to wall) -- the one spot that stays inside the dead
+    # LIVE labels the widest live region at its mid-height; DEAD sits just
+    # above the ground line, centered on each outer floor run (outermost
+    # live extent to the wall) -- the one spot that stays inside the dead
     # region regardless of the angles that shaped it.
-    dead_mid = (half_w + radius) / 2
+    if runs:
+        widest = max(runs, key=lambda r: r[-1] - r[0])
+        mid = (widest[0] + widest[-1]) / 2
+        mid_y = (channel_at(mid, y_cut) + surface(abs(mid))) / 2
+        body += f'<text x="{x_px(mid)}" y="{y_px(mid_y)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
+        outer = max(abs(runs[0][0]), abs(runs[-1][-1]))
+    else:
+        outer = 0.0
+    dead_mid = (outer + radius) / 2
     dead_y = y_px(0) - 6
-    body += f'<text x="{x_px(0)}" y="{y_px(apex * 0.35)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
     body += f'<text x="{x_px(-dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
     body += f'<text x="{x_px(dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
     elevation = close(body)
 
-    # Plan heatmap: concentric bands of DEAD pile depth (near-radial for a
-    # centered opening). Dead depth is the material below the funnel line --
-    # min(channel height, product surface): zero over the opening, deepest
-    # at the channel-reach ring, tapering as the surface drops to the wall.
+    # Plan heatmap of DEAD pile depth -- the material below the funnel line,
+    # min(channel height, product surface): zero over each opening, deepest
+    # where the channel meets the surface, tapering to the wall. A single
+    # centered opening is radially symmetric, so it renders as smooth
+    # concentric bands; multi-hopper layouts rasterize on a grid (adjacent
+    # same-color cells merged per row) clipped to the dome footprint.
     height_px = 2 * radius * scale + 40
     cx, cy = x_px(0.0), round(height_px / 2, 1)
 
-    def dead_depth(r):
-        return min(t_dd * max(r - half_w, 0.0), surface(r))
-
-    bands = 20
-    max_depth = max(dead_depth(radius * i / 200) for i in range(201)) or 1.0
     heat = ""
-    for i in range(bands, 0, -1):
-        r = radius * i / bands
-        r_mid = radius * (i - 0.5) / bands
+    if len(openings) == 1:
+        def dead_depth(r):
+            return min(t_dd * max(r - open_w / 2, 0.0), surface(r))
+
+        bands = 20
+        max_depth = max(dead_depth(radius * i / 200) for i in range(201)) or 1.0
+        for i in range(bands, 0, -1):
+            r = radius * i / bands
+            r_mid = radius * (i - 0.5) / bands
+            heat += (
+                f'<circle cx="{cx}" cy="{cy}" r="{r * scale:.1f}" '
+                f'fill="{_heat_color(dead_depth(r_mid) / max_depth)}" stroke="none"/>'
+            )
+    else:
+        def dead_depth_xy(x, y):
+            return min(channel_at(x, y), surface(math.hypot(x, y)))
+
+        n, levels = 72, 20
+        cell = 2 * radius / n
+        centers = [-radius + (k + 0.5) * cell for k in range(n)]
+        keep = radius + cell  # cells near the rim stay; the clip trims them
+        depth_rows = [
+            [dead_depth_xy(x, y) if math.hypot(x, y) <= keep else None for x in centers]
+            for y in centers
+        ]
+        max_depth = max((d for row in depth_rows for d in row if d), default=0.0) or 1.0
         heat += (
-            f'<circle cx="{cx}" cy="{cy}" r="{r * scale:.1f}" '
-            f'fill="{_heat_color(dead_depth(r_mid) / max_depth)}" stroke="none"/>'
+            f'<defs><clipPath id="ld-plan-clip">'
+            f'<circle cx="{cx}" cy="{cy}" r="{radius * scale:.1f}"/></clipPath></defs>'
+            '<g clip-path="url(#ld-plan-clip)">'
         )
-    heat += (
-        f'<rect x="{cx - half_w * scale:.1f}" y="{cy - open_l / 2 * scale:.1f}" '
-        f'width="{open_w * scale:.1f}" height="{open_l * scale:.1f}" '
-        'fill="#b03a2e" stroke="#fff" stroke-width="1"/>'
-    )
+        for j, row in enumerate(depth_rows):
+            y0 = cy + (centers[j] - cell / 2) * scale
+            i = 0
+            while i < n:
+                if row[i] is None:
+                    i += 1
+                    continue
+                idx = min(int(row[i] / max_depth * levels), levels - 1)
+                i2 = i
+                while i2 + 1 < n and row[i2 + 1] is not None and \
+                        min(int(row[i2 + 1] / max_depth * levels), levels - 1) == idx:
+                    i2 += 1
+                x0 = cx + (centers[i] - cell / 2) * scale
+                heat += (
+                    f'<rect x="{x0:.1f}" y="{y0:.1f}" '
+                    f'width="{(i2 - i + 1) * cell * scale + 0.5:.1f}" height="{cell * scale + 0.5:.1f}" '
+                    f'fill="{_heat_color((idx + 0.5) / levels)}" stroke="none"/>'
+                )
+                i = i2 + 1
+        heat += "</g>"
+
+    for ocx, ocy, w, l in openings:
+        heat += (
+            f'<rect x="{cx + (ocx - w / 2) * scale:.1f}" y="{cy + (ocy - l / 2) * scale:.1f}" '
+            f'width="{w * scale:.1f}" height="{l * scale:.1f}" '
+            'fill="#b03a2e" stroke="#fff" stroke-width="1"/>'
+        )
     heat += f'<circle cx="{cx}" cy="{cy}" r="{radius * scale:.1f}" {STRUCT_THIN}/>'
     plan = _svg(heat, width, height_px)
 
-    axo = _dead_pile_iso(core, stem_wall, dome_height, surface, t_dd, openings, units)
+    multi = len(openings) > 1
+    axo = _dead_pile_iso(
+        core, stem_wall, dome_height, surface, t_dd, openings, units,
+        n_rings=40 if multi else 30, n_spokes=80 if multi else 56,
+    )
+    plan_caption = (
+        "Darker is deeper dead material; red marks the hopper openings"
+        if multi else "Darker is deeper dead material; red is the hopper opening"
+    )
+    section_caption = SCALE_CAPTION + ("; cut along a tunnel centerline" if multi else "")
     return [
-        ("Reclaim Section — Live & Dead", elevation, SCALE_CAPTION),
-        ("Plan — Dead Pile Depth", plan, "Darker is deeper dead material; red is the hopper opening"),
+        ("Reclaim Section — Live & Dead", elevation, section_caption),
+        ("Plan — Dead Pile Depth", plan, plan_caption),
         ("Isometric — Dead Pile Surface", axo, "Height-banded surface of the material left after drawdown; craters are the funnels"),
     ]
 
@@ -398,7 +493,8 @@ def _shade(hex_color, factor):
     return f"rgb({round(r * factor)},{round(g * factor)},{round(b * factor)})"
 
 
-def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units):
+def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units,
+                   n_rings=30, n_spokes=56):
     """Isometric surface plot of the dead pile left after drawdown, on a
     polar grid so the plot is trimmed exactly to the dome footprint: rings
     and spokes render the crater and rim smoothly, steep faces darken by
@@ -407,7 +503,6 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
     structure in the same projection."""
     R, total = core["radius"], stem_wall + dome_height
     curvature = core["radius_of_curvature"]
-    n_rings, n_spokes = 30, 56
 
     def rect_distance(x, y, opening):
         cx, cy, w, l = opening

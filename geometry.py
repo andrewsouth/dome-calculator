@@ -652,6 +652,21 @@ def dry_bulk_storage_sizer(
 # opening, so multiple inline hoppers or grids of tunnels work unchanged.
 
 
+def hopper_layout(opening_width, opening_length, hoppers=1, hopper_spacing=0.0,
+                  tunnels=1, tunnel_spacing=0.0):
+    """Opening rectangles for a centered grid of reclaim hoppers.
+
+    Tunnels run along the x axis (the section drawing's cut direction):
+    `hoppers` openings sit inline along each tunnel at `hopper_spacing`
+    center-to-center, and `tunnels` parallel tunnels are offset in y at
+    `tunnel_spacing` center-to-center. The whole grid is centered on the
+    dome, keeping the both-axis symmetry live_dead_reclaim requires.
+    """
+    xs = [(k - (hoppers - 1) / 2) * hopper_spacing for k in range(hoppers)]
+    ys = [(m - (tunnels - 1) / 2) * tunnel_spacing for m in range(tunnels)]
+    return [(x, y, opening_width, opening_length) for y in ys for x in xs]
+
+
 def _distance_to_opening(x, y, opening):
     cx, cy, width, length = opening
     dx = max(abs(x - cx) - width / 2, 0.0)
@@ -727,13 +742,17 @@ def live_dead_reclaim(
 def live_dead_storage(
     diameter, dome_height, stem_wall, repose_deg, drawdown_deg, density, density_unit,
     length_unit, freeboard, opening_width, opening_length, required_live=0.0,
+    hoppers=1, hopper_spacing=0.0, tunnels=1, tunnel_spacing=0.0,
 ):
-    """Result sections for the Live & Dead Storage calculator (single
-    centered opening for now; the engine already accepts many openings)."""
+    """Result sections for the Live & Dead Storage calculator: a centered
+    grid of `hoppers` inline openings per tunnel x `tunnels` tunnels."""
     if drawdown_deg <= repose_deg:
         raise ValueError("Drawdown angle must be steeper than the angle of repose.")
 
-    openings = [(0.0, 0.0, opening_width, opening_length)]
+    hoppers, tunnels = int(hoppers), int(tunnels)
+    openings = hopper_layout(
+        opening_width, opening_length, hoppers, hopper_spacing, tunnels, tunnel_spacing
+    )
     reclaim = live_dead_reclaim(
         diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard, openings
     )
@@ -748,7 +767,12 @@ def live_dead_storage(
         diameter, dome_height, stem_wall, repose_deg, density, density_unit, length_unit, freeboard
     )
 
-    reclaim_rows = [
+    reclaim_rows = []
+    if hoppers > 1:
+        reclaim_rows.append(("Hopper Spacing (c-c)", hopper_spacing, 1))
+    if tunnels > 1:
+        reclaim_rows.append(("Tunnel Spacing (c-c)", tunnel_spacing, 1))
+    reclaim_rows += [
         ("Live Volume", reclaim["live_volume"], 3),
         ("Live Mass", mass_of(reclaim["live_volume"]), mass_unit_label),
         ("Dead Volume", reclaim["dead_volume"], 3),
@@ -757,7 +781,12 @@ def live_dead_storage(
         ("Channel Meets Surface at (±)", reclaim["channel_reach"], 1),
         ("Surface Elevation There", reclaim["channel_reach_elevation"], 1),
     ]
-    opening_label = f"{opening_width:,.2f} × {opening_length:,.2f} {length_unit} opening"
+    size_label = f"{opening_width:,.2f} × {opening_length:,.2f} {length_unit}"
+    if len(openings) == 1:
+        opening_label = f"{size_label} opening"
+    else:
+        layout = f"{hoppers} per tunnel × {tunnels} tunnel{'s' if tunnels > 1 else ''}"
+        opening_label = f"{len(openings)} × {size_label} openings ({layout})"
     sections.insert(1, (f"Reclaim — {opening_label}", reclaim_rows))
 
     if required_live > 0:

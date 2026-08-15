@@ -1,3 +1,5 @@
+import math
+
 from flask import Flask, render_template, request
 
 import diagrams
@@ -37,10 +39,19 @@ BU_M3 = BU_TO_FT3 * FT3_TO_M3
 UNIT_TO_M = {"ft": 0.3048, "in": 0.0254, "m": 1.0, "mm": 0.001}
 # Freeboard default depends on the selected length unit: 1.5 ft or 0.5 m.
 FREEBOARD_DEFAULTS = {"ft": 1.5, "in": 18.0, "m": 0.5, "mm": 500.0}
+# Default center-to-center spacing for multi-hopper layouts: 15 ft or 5 m.
+SPACING_DEFAULTS = {"ft": 15.0, "in": 180.0, "m": 5.0, "mm": 5000.0}
 
 
 def number_field(key, label, default):
     return {"key": key, "label": label, "default": default, "kind": "number", "unit": "length"}
+
+
+def count_field(key, label, default):
+    """A whole-number field (hopper/tunnel counts): rendered without
+    decimals and validated as an integer."""
+    return {"key": key, "label": label, "default": default, "kind": "number",
+            "unit": "", "integer": True}
 
 
 def plain_number_field(key, label, default, suffix=""):
@@ -203,6 +214,28 @@ def _validate_live_dead(v):
         errors.append("Opening must be smaller than the dome diameter.")
     if not (0 <= v["required_live"] < 100):
         errors.append("Target live must be a percentage from 0 to less than 100.")
+
+    hoppers, tunnels = v["hoppers"], v["tunnels"]
+    if hoppers != int(hoppers) or hoppers < 1:
+        errors.append("Hoppers per tunnel must be a whole number of 1 or more.")
+    if tunnels != int(tunnels) or tunnels < 1:
+        errors.append("Tunnels must be a whole number of 1 or more.")
+    if errors:
+        return errors
+
+    hoppers, tunnels = int(hoppers), int(tunnels)
+    if hoppers * tunnels > 40:
+        errors.append("Layout is limited to 40 openings total (hoppers per tunnel × tunnels).")
+    if hoppers > 1 and v["hopper_spacing"] < v["opening_w"]:
+        errors.append("Hopper spacing (center-to-center) must be at least the opening width, or openings overlap.")
+    if tunnels > 1 and v["tunnel_spacing"] < v["opening_l"]:
+        errors.append("Tunnel spacing (center-to-center) must be at least the opening length, or openings overlap.")
+    if not errors:
+        # The outermost opening corner must stay inside the dome footprint.
+        corner_x = (hoppers - 1) / 2 * v["hopper_spacing"] + v["opening_w"] / 2
+        corner_y = (tunnels - 1) / 2 * v["tunnel_spacing"] + v["opening_l"] / 2
+        if math.hypot(corner_x, corner_y) >= v["diameter"] / 2:
+            errors.append("Hopper layout extends beyond the dome footprint — reduce counts or spacing.")
     return errors
 
 
@@ -368,6 +401,10 @@ SHAPES = {
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
             number_field("opening_w", "Opening Width", 5.0),
             number_field("opening_l", "Opening Length", 5.0),
+            count_field("hoppers", "Hoppers per Tunnel", 1.0),
+            number_field("hopper_spacing", "Hopper Spacing", SPACING_DEFAULTS),
+            count_field("tunnels", "Tunnels", 1.0),
+            number_field("tunnel_spacing", "Tunnel Spacing", SPACING_DEFAULTS),
             plain_number_field("required_live", "Target Live", 0.0, "%"),
         ],
         "validate": _validate_live_dead,
@@ -375,6 +412,7 @@ SHAPES = {
             v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
             v["density"], v["density_unit"], v["units"], v["freeboard"],
             v["opening_w"], v["opening_l"], v["required_live"],
+            v["hoppers"], v["hopper_spacing"], v["tunnels"], v["tunnel_spacing"],
         ),
     },
 }

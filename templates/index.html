@@ -135,7 +135,7 @@
             <label for="{{ field.key }}">
               {{ field.label }}{% if field.unit == "length" %} ({{ values.units }}){% elif field.unit == "volume" %} ({{ values.units }}&sup3;){% elif field.unit %} ({{ field.unit }}){% endif %}
             </label>
-            <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.2f}'.format(values[field.key]) }}">
+            <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.0f}'.format(values[field.key]) if field.integer and values[field.key] % 1 == 0 else '{:,.2f}'.format(values[field.key]) }}">
           {% endif %}
         </div>
       {% endfor %}

@@ -416,3 +416,50 @@ def test_live_dead_storage_sections_include_check():
     dead = _value(reclaim_rows, "Dead Volume")
     product = _value(_section(sections, "Product"), "Volume")
     assert live + dead == pytest.approx(product)
+
+
+def test_hopper_layout_grid_is_centered_and_symmetric():
+    from geometry import hopper_layout
+
+    # Single hopper: one centered opening.
+    assert hopper_layout(5.0, 5.0) == [(0.0, 0.0, 5.0, 5.0)]
+
+    # 3 inline hoppers at 10 c-c along x, 2 tunnels at 12 c-c along y.
+    grid = hopper_layout(5.0, 5.0, hoppers=3, hopper_spacing=10.0,
+                         tunnels=2, tunnel_spacing=12.0)
+    assert len(grid) == 6
+    assert sorted({x for x, _y, _w, _l in grid}) == [-10.0, 0.0, 10.0]
+    assert sorted({y for _x, y, _w, _l in grid}) == [-6.0, 6.0]
+    # Centered: coordinates sum to zero on both axes.
+    assert sum(x for x, _y, _w, _l in grid) == pytest.approx(0.0)
+    assert sum(y for _x, y, _w, _l in grid) == pytest.approx(0.0)
+
+
+def test_live_dead_storage_multi_hopper_recovers_more_than_single():
+    from geometry import live_dead_storage
+
+    # Steep drawdown against a tall pile: each channel is narrow, so extra
+    # hoppers add nearly disjoint live columns.
+    kwargs = dict(
+        diameter=66.0, dome_height=33.0, stem_wall=59.0, repose_deg=37.0,
+        drawdown_deg=70.0, density=100.0, density_unit="lbs/ft3",
+        length_unit="ft", freeboard=2.0, opening_width=5.0, opening_length=5.0,
+    )
+    single = live_dead_storage(**kwargs)
+    multi = live_dead_storage(hoppers=3, hopper_spacing=15.0,
+                              tunnels=2, tunnel_spacing=15.0, **kwargs)
+
+    single_live = _value(_section_starting_with(single, "Reclaim"), "Live Volume")
+    multi_rows = _section_starting_with(multi, "Reclaim")
+    multi_live = _value(multi_rows, "Live Volume")
+    assert single_live * 2.0 < multi_live < single_live * 6.0
+
+    # Live + dead still equals the stored product volume.
+    product = _value(_section(multi, "Product"), "Volume")
+    assert multi_live + _value(multi_rows, "Dead Volume") == pytest.approx(product)
+
+    # Section title reports the layout; spacing rows appear.
+    title = next(t for t, _rows in multi if t.startswith("Reclaim"))
+    assert "6 ×" in title and "3 per tunnel × 2 tunnels" in title
+    labels = [label for label, _v, _s in multi_rows]
+    assert "Hopper Spacing (c-c)" in labels and "Tunnel Spacing (c-c)" in labels
