@@ -541,12 +541,15 @@ def live_dead(v):
 
 def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units,
                    n_rings=30, n_spokes=56):
-    """Isometric surface plot of the dead pile left after drawdown, on a
+    """Axonometric surface plot of the dead pile left after drawdown, on a
     polar grid so the plot is trimmed exactly to the dome footprint: rings
     and spokes render the crater and rim smoothly, steep faces darken by
     slope for consistent cliff shading, an outer skirt closes the collar's
-    face at the wall, and a dashed wireframe ghost of the shell shows the
-    structure in the same projection."""
+    face at the wall, and a faint wireframe ghost of the shell shows the
+    structure in the same projection. The camera sits high (45 degrees) with
+    a slight yaw, so the tunnel axis reads left-to-right across the screen
+    (matching the Along Tunnel section) and the wall collar doesn't hide
+    the crater rows behind it."""
     R, total = core["radius"], stem_wall + dome_height
     curvature = core["radius_of_curvature"]
 
@@ -570,18 +573,25 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
         nodes.append(ring)
     zmax = max(z for ring in nodes for _x, _y, z in ring) or 1.0
 
-    # Isometric projection; vertical scale fits the full shell ghost.
-    c30, s30 = 0.8660, 0.5
-    scale = 250.0 / (2 * math.sqrt(2) * R * c30)
+    # Camera: 18-degree yaw (tunnels nearly horizontal on screen, a touch of
+    # recession for depth), 45-degree elevation (plan depth foreshortened by
+    # sin 45). u runs across the screen, w toward the viewer (painter sort).
+    yaw = math.radians(18)
+    cos_y, sin_y = math.cos(yaw), math.sin(yaw)
+    elev = 0.7071  # sin(45 deg)
+    scale = 250.0 / (2 * R)
     z_scale = min(scale, 118.0 / total)
     legend_h = 58
     ox = 150.0
-    oy = legend_h + 12 + total * z_scale + 0.7071 * R * scale
+    oy = legend_h + 12 + max(total * z_scale, stem_wall * z_scale + R * elev * scale)
+
+    def w_of(x, y):
+        return x * sin_y + y * cos_y
 
     def project(x, y, z):
         return (
-            round(ox + (x - y) * c30 * scale, 1),
-            round(oy + (x + y) * s30 * scale - z * z_scale, 1),
+            round(ox + (x * cos_y - y * sin_y) * scale, 1),
+            round(oy + w_of(x, y) * elev * scale - z * z_scale, 1),
         )
 
     # Faces use the same palette as the plan heatmap, keyed to the same
@@ -600,7 +610,7 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
             slope = (max(zs) - min(zs)) / ring_width
             factor = 1.0 if slope < 0.3 else max(0.68, 1.0 - 0.10 * slope)
             fill = _heat_color(mean_z / zmax, factor)
-            depth = sum(p[0] + p[1] for p in quad) / 4
+            depth = sum(w_of(p[0], p[1]) for p in quad) / 4
             faces.append((depth, fill, [project(*p) for p in quad]))
 
     # Outer skirt: the collar's face at the wall, dropped to the floor.
@@ -615,7 +625,7 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
             project(a[0], a[1], a[2]), project(b[0], b[1], b[2]),
             project(b[0], b[1], 0.0), project(a[0], a[1], 0.0),
         ]
-        faces.append((a[0] + a[1] + 0.01, fill, pts))
+        faces.append((w_of(a[0], a[1]) + 0.01, fill, pts))
 
     faces.sort(key=lambda f: f[0])
     body = ""
@@ -624,28 +634,31 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
         body += f'<polygon points="{point_str}" fill="{fill}" stroke="{fill}" stroke-width="0.5"/>'
 
     # Ghost of the shell: base ring, wall silhouette, springline, dome
-    # latitudes, and apex marker -- all in the same projection.
+    # latitudes, and apex marker -- all in the same projection, kept faint
+    # so the structure reads without competing with the surface.
+    ghost_style = 'stroke="#c9c9c9" stroke-width="1.1" fill="none" stroke-dasharray="5,4"'
+
     def ring_ghost(r, z, style):
         return (
             f'<ellipse cx="{ox}" cy="{round(oy - z * z_scale, 1)}" '
-            f'rx="{1.2247 * r * scale:.1f}" ry="{0.7071 * r * scale:.1f}" {style}/>'
+            f'rx="{r * scale:.1f}" ry="{r * elev * scale:.1f}" {style}/>'
         )
 
     ghost = ring_ghost(R, 0.0, STRUCT_THIN)
-    ghost += ring_ghost(R, stem_wall, DASHED)
-    u_edge = 1.2247 * R * scale
+    ghost += ring_ghost(R, stem_wall, ghost_style)
+    u_edge = R * scale
     for side in (-1, 1):
         ghost += (
             f'<line x1="{ox + side * u_edge:.1f}" y1="{oy}" '
-            f'x2="{ox + side * u_edge:.1f}" y2="{round(oy - stem_wall * z_scale, 1)}" {DASHED}/>'
+            f'x2="{ox + side * u_edge:.1f}" y2="{round(oy - stem_wall * z_scale, 1)}" {ghost_style}/>'
         )
     sphere_center = stem_wall + dome_height - curvature
     for fraction in (0.45, 0.8):
         z = stem_wall + dome_height * fraction
         r = math.sqrt(max(curvature ** 2 - (z - sphere_center) ** 2, 0.0))
-        ghost += ring_ghost(r, z, DASHED)
+        ghost += ring_ghost(r, z, ghost_style)
     apex_y = round(oy - total * z_scale, 1)
-    ghost += f'<circle cx="{ox}" cy="{apex_y}" r="1.6" fill="#999"/>'
+    ghost += f'<circle cx="{ox}" cy="{apex_y}" r="1.6" fill="#bbb"/>'
     body += ghost
 
     # Legend: the plan heatmap's gradient, 0 to the deepest dead pile.
@@ -665,5 +678,5 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
     )
     body += f'<text x="{bar_x + bar_w + 10}" y="{bar_y + bar_h - 1}" {legend_text}>dead pile depth</text>'
 
-    height_px = oy + 0.7071 * R * scale + 16
+    height_px = oy + R * elev * scale + 16
     return _svg(body, 300, height_px)
