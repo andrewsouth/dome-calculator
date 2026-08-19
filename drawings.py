@@ -10,6 +10,7 @@ Each draw function returns a list of (title, svg, caption) boxes.
 """
 
 import math
+import re
 
 from geometry import (
     dry_bulk_geometry,
@@ -291,6 +292,31 @@ def dry_bulk_sizer(v):
     return _dry_bulk_drawing(2 * radius, radius, v["stem_wall"], v["angle"], v["freeboard"], v["units"])
 
 
+def _hstack(panels, gap=16, label_h=18):
+    """Place complete SVGs side by side inside one outer SVG, each with a
+    small label centered above it. SVG nests cleanly: the inner documents
+    keep their own coordinate systems, and the outer viewBox scales the
+    whole row down together if the page is narrower."""
+    parsed = []
+    for panel_label, svg in panels:
+        w, h = (int(n) for n in re.search(r'viewBox="0 0 (\d+) (\d+)"', svg).groups())
+        parsed.append((panel_label, svg, w, h))
+    total_w = sum(w for _l, _s, w, _h in parsed) + gap * (len(parsed) - 1)
+    total_h = label_h + max(h for _l, _s, _w, h in parsed)
+
+    x = 0
+    body = ""
+    for panel_label, svg, w, h in parsed:
+        body += (
+            f'<text x="{x + w / 2:.0f}" y="12" text-anchor="middle" font-size="12" '
+            f'font-family="system-ui, sans-serif" font-weight="600" fill="#666">{panel_label}</text>'
+        )
+        inner = svg.replace(' style="max-width:100%;height:auto"', "", 1)
+        body += inner.replace("<svg ", f'<svg x="{x}" y="{label_h}" height="{h}" ', 1)
+        x += w + gap
+    return _svg(body, total_w, total_h)
+
+
 # -- Live & dead reclaim drawing --
 
 HEAT_STOPS = [  # live column depth 0 -> max, light to dark
@@ -298,12 +324,17 @@ HEAT_STOPS = [  # live column depth 0 -> max, light to dark
 ]
 
 
-def _heat_color(fraction):
+def _heat_color(fraction, shade=1.0):
+    """Palette color for a 0..1 dead depth; `shade` < 1 darkens (used by the
+    isometric view to keep steep crater walls readable)."""
     fraction = min(max(fraction, 0.0), 1.0)
     scaled = fraction * (len(HEAT_STOPS) - 1)
     i = min(int(scaled), len(HEAT_STOPS) - 2)
     t = scaled - i
-    rgb = [round(HEAT_STOPS[i][c] + (HEAT_STOPS[i + 1][c] - HEAT_STOPS[i][c]) * t) for c in range(3)]
+    rgb = [
+        round((HEAT_STOPS[i][c] + (HEAT_STOPS[i + 1][c] - HEAT_STOPS[i][c]) * t) * shade)
+        for c in range(3)
+    ]
     return f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
 
 
@@ -337,69 +368,89 @@ def live_dead(v):
             for cx, cy, w, l in openings
         )
 
-    # Section: gray pile, blue live channels. The cut runs along a tunnel
-    # line (the center tunnel, or the first tunnel off-center when the
-    # tunnel count is even), so every hopper in that tunnel shows its
-    # funnel; adjacent funnels merge where the channel stays below the
-    # product surface between openings.
-    y_cut = 0.0 if tunnels % 2 else tunnel_spacing / 2
-    scale, x_px, y_px, close, width = _ground_shape_frame(radius, total, units)
-    body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
+    def section_panel(cut, along_x):
+        """One to-scale section through the pile. along_x=True cuts along a
+        tunnel line (the center tunnel, or the first tunnel off-center when
+        the count is even), so every hopper in that tunnel shows its funnel;
+        along_x=False is the 90-degree cut across the tunnels through a
+        hopper row, showing one funnel per tunnel. Adjacent funnels merge
+        where the channel stays below the product surface between openings."""
+        scale, x_px, y_px, close, _width = _ground_shape_frame(radius, total, units)
+        body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
 
-    # Sample the channel surface along the cut and collect the contiguous
-    # runs where product stands above it: each run is one live region,
-    # bounded above by the product surface and below by the channel
-    # (clipped to the surface, so wall run-ups close cleanly).
-    n_sec = 360
-    tiny = total * 1e-6
-    runs, current = [], []
-    for i in range(n_sec + 1):
-        x = -radius + 2 * radius * i / n_sec
-        if surface(abs(x)) - channel_at(x, y_cut) > tiny:
-            current.append(x)
-        elif current:
+        def channel(s):
+            return channel_at(s, cut) if along_x else channel_at(cut, s)
+
+        # Sample the channel surface along the cut and collect the contiguous
+        # runs where product stands above it: each run is one live region,
+        # bounded above by the product surface and below by the channel
+        # (clipped to the surface, so wall run-ups close cleanly).
+        n_sec = 360
+        tiny = total * 1e-6
+        runs, current = [], []
+        for i in range(n_sec + 1):
+            s = -radius + 2 * radius * i / n_sec
+            if surface(abs(s)) - channel(s) > tiny:
+                current.append(s)
+            elif current:
+                runs.append(current)
+                current = []
+        if current:
             runs.append(current)
-            current = []
-    if current:
-        runs.append(current)
 
-    for run in runs:
-        pts = [(x, surface(abs(x))) for x in run]
-        pts += [(x, min(channel_at(x, y_cut), surface(abs(x)))) for x in reversed(run)]
-        body += (
-            f'<polygon points="{_polygon_str(pts, x_px, y_px)}" '
-            'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
-        )
-
-    # Red opening marks: every hopper the cut passes through.
-    for cx, cy, w, l in openings:
-        if abs(y_cut - cy) <= l / 2:
+        for run in runs:
+            pts = [(s, surface(abs(s))) for s in run]
+            pts += [(s, min(channel(s), surface(abs(s)))) for s in reversed(run)]
             body += (
-                f'<rect x="{x_px(cx - w / 2)}" y="{y_px(0) - 3}" '
-                f'width="{(x_px(cx + w / 2) - x_px(cx - w / 2)):.1f}" height="4" fill="#b03a2e"/>'
+                f'<polygon points="{_polygon_str(pts, x_px, y_px)}" '
+                'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
             )
-    body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
-    label = (
-        'font-size="13" font-family="system-ui, sans-serif" font-weight="600" '
-        'stroke="#fff" stroke-width="3" paint-order="stroke" stroke-linejoin="round"'
-    )
-    # LIVE labels the widest live region at its mid-height; DEAD sits just
-    # above the ground line, centered on each outer floor run (outermost
-    # live extent to the wall) -- the one spot that stays inside the dead
-    # region regardless of the angles that shaped it.
-    if runs:
-        widest = max(runs, key=lambda r: r[-1] - r[0])
-        mid = (widest[0] + widest[-1]) / 2
-        mid_y = (channel_at(mid, y_cut) + surface(abs(mid))) / 2
-        body += f'<text x="{x_px(mid)}" y="{y_px(mid_y)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
-        outer = max(abs(runs[0][0]), abs(runs[-1][-1]))
-    else:
-        outer = 0.0
-    dead_mid = (outer + radius) / 2
-    dead_y = y_px(0) - 6
-    body += f'<text x="{x_px(-dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
-    body += f'<text x="{x_px(dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
-    elevation = close(body)
+
+        # Red opening marks: every hopper the cut passes through.
+        for ocx, ocy, w, l in openings:
+            if along_x:
+                on_cut, center, half = abs(cut - ocy) <= l / 2, ocx, w / 2
+            else:
+                on_cut, center, half = abs(cut - ocx) <= w / 2, ocy, l / 2
+            if on_cut:
+                body += (
+                    f'<rect x="{x_px(center - half)}" y="{y_px(0) - 3}" '
+                    f'width="{(x_px(center + half) - x_px(center - half)):.1f}" height="4" fill="#b03a2e"/>'
+                )
+        body += _dome_body(radius, dome_height, stem_wall, scale, x_px, y_px)
+        label = (
+            'font-size="13" font-family="system-ui, sans-serif" font-weight="600" '
+            'stroke="#fff" stroke-width="3" paint-order="stroke" stroke-linejoin="round"'
+        )
+        # LIVE labels the widest live region at its mid-height; DEAD sits just
+        # above the ground line, centered on each outer floor run (outermost
+        # live extent to the wall) -- the one spot that stays inside the dead
+        # region regardless of the angles that shaped it.
+        if runs:
+            widest = max(runs, key=lambda r: r[-1] - r[0])
+            mid = (widest[0] + widest[-1]) / 2
+            mid_y = (channel(mid) + surface(abs(mid))) / 2
+            body += f'<text x="{x_px(mid)}" y="{y_px(mid_y)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
+            outer = max(abs(runs[0][0]), abs(runs[-1][-1]))
+        else:
+            outer = 0.0
+        dead_mid = (outer + radius) / 2
+        dead_y = y_px(0) - 6
+        body += f'<text x="{x_px(-dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
+        body += f'<text x="{x_px(dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
+        return close(body)
+
+    # Two perpendicular sections, side by side: along a tunnel line, and the
+    # 90-degree cut across the tunnels through a hopper row.
+    y_cut = 0.0 if tunnels % 2 else tunnel_spacing / 2
+    x_cut = 0.0 if hoppers % 2 else hopper_spacing / 2
+    elevation = _hstack([
+        ("Along Tunnel", section_panel(y_cut, True)),
+        ("Across Tunnels", section_panel(x_cut, False)),
+    ])
+
+    # The plan below shares the sections' horizontal scale and centerline.
+    scale, x_px, _y_px, _close, width = _ground_shape_frame(radius, total, units)
 
     # Plan heatmap of DEAD pile depth -- the material below the funnel line,
     # min(channel height, product surface): zero over each opening, deepest
@@ -481,17 +532,12 @@ def live_dead(v):
         "Darker is deeper dead material; red marks the hopper openings"
         if multi else "Darker is deeper dead material; red is the hopper opening"
     )
-    section_caption = SCALE_CAPTION + ("; cut along a tunnel centerline" if multi else "")
+    section_caption = SCALE_CAPTION + "; cut along a tunnel centerline (left) and 90&deg; across the tunnels (right)"
     return [
-        ("Reclaim Section — Live & Dead", elevation, section_caption),
+        ("Reclaim Sections — Live & Dead", elevation, section_caption),
         ("Plan — Dead Pile Depth", plan, plan_caption),
-        ("Isometric — Dead Pile Surface", axo, "Height-banded surface of the material left after drawdown; craters are the funnels"),
+        ("Isometric — Dead Pile Surface", axo, "Surface of the material left after drawdown; craters are the funnels — same colors as the plan (darker is deeper dead)"),
     ]
-
-def _shade(hex_color, factor):
-    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
-    return f"rgb({round(r * factor)},{round(g * factor)},{round(b * factor)})"
-
 
 def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, units,
                    n_rings=30, n_spokes=56):
@@ -538,11 +584,10 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
             round(oy + (x + y) * s30 * scale - z * z_scale, 1),
         )
 
-    bands = ["#5b9bd5", "#ed7d31", "#a5a5a5"]
-
-    def band_of(z):
-        return min(int(z / zmax * 3), 2)
-
+    # Faces use the same palette as the plan heatmap, keyed to the same
+    # quantity (dead pile depth), so the two views read together: pale =
+    # shallow dead, dark blue = deep. Steep crater walls darken by slope so
+    # the funnels stay legible in 3D.
     ring_width = R / n_rings
     faces = []  # (depth, fill, points)
 
@@ -554,7 +599,7 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
             mean_z = sum(zs) / 4
             slope = (max(zs) - min(zs)) / ring_width
             factor = 1.0 if slope < 0.3 else max(0.68, 1.0 - 0.10 * slope)
-            fill = _shade(bands[band_of(mean_z)], factor)
+            fill = _heat_color(mean_z / zmax, factor)
             depth = sum(p[0] + p[1] for p in quad) / 4
             faces.append((depth, fill, [project(*p) for p in quad]))
 
@@ -565,7 +610,7 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
         if max(a[2], b[2]) < zmax * 0.01:
             continue
         mean_z = (a[2] + b[2]) / 2
-        fill = _shade(bands[band_of(mean_z)], 0.66)
+        fill = _heat_color(mean_z / zmax, 0.66)
         pts = [
             project(a[0], a[1], a[2]), project(b[0], b[1], b[2]),
             project(b[0], b[1], 0.0), project(a[0], a[1], 0.0),
@@ -603,15 +648,22 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
     ghost += f'<circle cx="{ox}" cy="{apex_y}" r="1.6" fill="#999"/>'
     body += ghost
 
-    # Legend, highest band first.
-    for idx in range(2, -1, -1):
-        lo, hi = zmax * idx / 3, zmax * (idx + 1) / 3
-        y = 12 + (2 - idx) * 17
-        body += f'<rect x="14" y="{y}" width="12" height="12" fill="{bands[idx]}"/>'
+    # Legend: the plan heatmap's gradient, 0 to the deepest dead pile.
+    bar_x, bar_w, bar_y, bar_h, steps = 14, 120, 14, 10, 24
+    for k in range(steps):
         body += (
-            f'<text x="32" y="{y + 10}" font-size="11" font-family="system-ui, sans-serif" '
-            f'fill="#555">{lo:,.1f}&#8211;{hi:,.1f} {units}</text>'
+            f'<rect x="{bar_x + bar_w * k / steps:.1f}" y="{bar_y}" '
+            f'width="{bar_w / steps + 0.5:.1f}" height="{bar_h}" '
+            f'fill="{_heat_color((k + 0.5) / steps)}"/>'
         )
+    body += f'<rect x="{bar_x}" y="{bar_y}" width="{bar_w}" height="{bar_h}" fill="none" stroke="#bbb" stroke-width="0.5"/>'
+    legend_text = 'font-size="11" font-family="system-ui, sans-serif" fill="#555"'
+    body += f'<text x="{bar_x}" y="{bar_y + bar_h + 13}" {legend_text}>0</text>'
+    body += (
+        f'<text x="{bar_x + bar_w}" y="{bar_y + bar_h + 13}" text-anchor="end" {legend_text}>'
+        f'{zmax:,.1f} {units}</text>'
+    )
+    body += f'<text x="{bar_x + bar_w + 10}" y="{bar_y + bar_h - 1}" {legend_text}>dead pile depth</text>'
 
     height_px = oy + 0.7071 * R * scale + 16
     return _svg(body, 300, height_px)
