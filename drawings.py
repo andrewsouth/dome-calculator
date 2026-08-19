@@ -593,13 +593,17 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
     zmax = max(z for ring in nodes for _x, _y, z in ring) or 1.0
 
     # Camera: 18-degree yaw (tunnels nearly horizontal on screen, a touch of
-    # recession for depth), 25-degree elevation (plan depth foreshortened by
-    # sin 25). u runs across the screen, w toward the viewer (painter sort).
+    # recession for depth), 25-degree elevation. A true orthographic camera:
+    # plan depth foreshortens by sin(25), heights by cos(25) -- the SAME
+    # world scale for both, so the dome keeps its real proportions (a
+    # hemisphere looks like one). The drawing fits its budget by shrinking
+    # uniformly, never by squashing the z axis.
     yaw = math.radians(18)
     cos_y, sin_y = math.cos(yaw), math.sin(yaw)
     elev = math.sin(math.radians(25))
-    scale = 250.0 / (2 * R)
-    z_scale = min(scale, 118.0 / total)
+    z_fac = math.cos(math.radians(25))
+    scale = min(260.0 / (2 * R), 250.0 / (total * z_fac + R * elev))
+    z_scale = scale * z_fac
     legend_h = 58
     ox = 150.0
     oy = legend_h + 12 + max(total * z_scale, stem_wall * z_scale + R * elev * scale)
