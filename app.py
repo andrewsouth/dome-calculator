@@ -1,6 +1,7 @@
 import math
+from datetime import date
 
-from flask import Flask, render_template, request
+from flask import Flask, redirect, render_template, request
 
 import diagrams
 import drawings
@@ -502,6 +503,27 @@ def index():
             unit_choices=UNIT_CHOICES,
         )
 
+    submitted, values, errors, results, detail_results, drawing = _stage3_state(shape_key, units)
+
+    return render_template(
+        "index.html",
+        stage=stage,
+        shape_key=shape_key,
+        units=units,
+        shapes=SHAPES,
+        unit_choices=UNIT_CHOICES,
+        values=values,
+        results=results,
+        detail_results=detail_results,
+        drawing=drawing,
+        errors=errors,
+        submitted=submitted,
+    )
+
+
+def _stage3_state(shape_key, units):
+    """Parse, convert, validate, and compute for a stage-3 request. Shared
+    by the calculator page and the printable report."""
     shape = SHAPES[shape_key]
     errors = []
 
@@ -598,19 +620,35 @@ def index():
                     if not any(title.startswith(prefix) for prefix in detail_prefixes)
                 ]
 
+    return submitted, values, errors, results, detail_results, drawing
+
+
+@app.route("/report")
+def report():
+    """Printable report of one calculation: header, inputs, drawings, and
+    the full results (engineering breakdown included). The browser's
+    Save-as-PDF renders it -- SVG drawings stay vector-exact."""
+    shape_key = request.args.get("shape")
+    units = request.args.get("units")
+    if shape_key not in SHAPES or units not in UNIT_CHOICES:
+        return redirect("/")
+
+    _submitted, values, errors, results, detail_results, drawing = _stage3_state(shape_key, units)
+    if results is None:
+        # Nothing to report (not calculated, or invalid): back to the form.
+        query = request.query_string.decode()
+        return redirect(f"/?{query}" if query else "/")
+
     return render_template(
-        "index.html",
-        stage=stage,
+        "report.html",
         shape_key=shape_key,
+        shape=SHAPES[shape_key],
         units=units,
-        shapes=SHAPES,
-        unit_choices=UNIT_CHOICES,
         values=values,
         results=results,
         detail_results=detail_results,
         drawing=drawing,
-        errors=errors,
-        submitted=submitted,
+        today=date.today().strftime("%B %d, %Y"),
     )
 
 

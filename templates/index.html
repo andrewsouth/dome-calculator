@@ -55,6 +55,12 @@
     .drawing svg { display: block; }
     .drawing-title { font-weight: 600; color: #444; margin-bottom: 0.5rem; }
     .drawing-caption { margin: 0.5rem 0 0; font-size: 0.8rem; color: #888; }
+    .export-report {
+      display: inline-block; margin-top: 1rem; padding: 0.45rem 1.1rem;
+      border: 1px solid #999; border-radius: 4px; background: #f6f6f6;
+      color: #222; text-decoration: none; font-size: 0.9rem; font-weight: 600;
+    }
+    .export-report:hover { border-color: #555; background: #eee; }
     .detail-results { margin-top: 1.5rem; }
     .detail-results summary { cursor: pointer; font-weight: 600; color: #555; padding: 0.4rem 0; }
     .detail-results summary:hover { color: #222; }
@@ -157,6 +163,7 @@
     {% endif %}
 
     {% if results %}
+      <p><a class="export-report" href="/report?{{ request.query_string.decode() }}">Export PDF report</a></p>
       {% if drawing %}
         {% for box_title, box_svg, box_caption in drawing %}
           <div class="drawing">

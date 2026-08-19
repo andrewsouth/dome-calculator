@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ shape.label }} — Dome Calculator Report</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 1.5rem auto; padding: 0 1rem; color: #222; }
+    .toolbar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1.25rem; }
+    .toolbar button, .toolbar a {
+      padding: 0.5rem 1.25rem; font-size: 0.95rem; cursor: pointer; text-decoration: none;
+      border: 1px solid #999; border-radius: 4px; background: #f6f6f6; color: #222;
+    }
+    .toolbar .hint { font-size: 0.8rem; color: #888; }
+
+    .report-head { border-bottom: 3px solid #222; padding-bottom: 0.6rem; margin-bottom: 0.4rem; }
+    .report-head .app { font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: #666; }
+    .report-head h1 { margin: 0.1rem 0 0; font-size: 1.5rem; }
+    .meta { width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.9rem; }
+    .meta td { padding: 0.22rem 0.5rem 0.22rem 0; border-bottom: 1px solid #e4e4e4; }
+    .meta td.k { width: 9rem; color: #666; font-weight: 600; }
+    .meta [contenteditable] { display: inline-block; min-width: 16rem; padding: 0 0.2rem; outline: none; border-bottom: 1px dotted #bbb; }
+    .meta [contenteditable]:empty::before { content: attr(data-hint); color: #bbb; }
+
+    h2 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; border-bottom: 1px solid #ccc; padding-bottom: 0.2rem; }
+    table.data { border-collapse: collapse; font-size: 0.92rem; }
+    table.data td { padding: 0.24rem 1rem 0.24rem 0; }
+    table.data td:first-child { width: 14rem; }
+    table.data td.value { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; width: 8rem; }
+    table.data td.unit { text-align: left; padding-left: 0.4rem; color: #555; }
+    .section-title { font-weight: 600; margin-top: 0.8rem; font-size: 0.95rem; }
+    .inputs { columns: 2; column-gap: 2.5rem; }
+    .inputs table.data { width: 100%; break-inside: avoid; }
+    .inputs td:first-child { width: auto; }
+
+    .drawing { margin: 1rem 0; padding: 0.75rem 1rem; border: 1px solid #ddd; border-radius: 6px; width: fit-content; max-width: 100%; break-inside: avoid; }
+    .drawing svg { display: block; max-width: 100%; height: auto; }
+    .drawing-title { font-weight: 600; color: #444; margin-bottom: 0.4rem; font-size: 0.95rem; }
+    .drawing-caption { margin: 0.4rem 0 0; font-size: 0.78rem; color: #888; }
+
+    .report-foot { margin-top: 2rem; padding-top: 0.5rem; border-top: 1px solid #ccc; font-size: 0.75rem; color: #888; display: flex; justify-content: space-between; }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { margin: 0; max-width: none; }
+      .meta [contenteditable] { border-bottom: none; }
+      .meta [contenteditable]:empty::before { content: ""; }
+      @page { margin: 0.6in; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button onclick="window.print()">Save as PDF</button>
+    <a href="/?{{ request.query_string.decode() }}">&larr; Back to calculator</a>
+    <span class="hint">In the print dialog choose &ldquo;Save as PDF&rdquo;. The Project lines below are editable before printing.</span>
+  </div>
+
+  <div class="report-head">
+    <div class="app">Dome Calculator</div>
+    <h1>{{ shape.label }}</h1>
+  </div>
+  <table class="meta">
+    <tr><td class="k">Project</td><td><span contenteditable data-hint="click to add project name"></span></td></tr>
+    <tr><td class="k">Reference</td><td><span contenteditable data-hint="click to add reference / document no."></span></td></tr>
+    <tr><td class="k">Prepared by</td><td><span contenteditable data-hint="click to add name"></span></td></tr>
+    <tr><td class="k">Date</td><td>{{ today }}</td></tr>
+  </table>
+
+  <h2>Inputs</h2>
+  <div class="inputs">
+    <table class="data">
+      {% for field in shape.fields %}
+        {% if not (field.manual_only and values.get("spacing_mode") == "optimize") %}
+          <tr>
+            <td>{{ field.label }}</td>
+            {% if field.kind == "select" %}
+              {% set chosen = values[field.key] %}
+              <td class="value"></td>
+              <td class="unit">{% for cv, cl in field.choices %}{% if cv == chosen %}{{ cl }}{% endif %}{% endfor %}</td>
+            {% else %}
+              <td class="value">{{ '{:,.0f}'.format(values[field.key]) if field.integer and values[field.key] % 1 == 0 else '{:,.2f}'.format(values[field.key]) }}</td>
+              <td class="unit">{% if field.unit == "length" %}{{ values.units }}{% elif field.unit == "volume" %}{{ values.units }}&sup3;{% elif field.unit %}{{ field.unit }}{% endif %}</td>
+            {% endif %}
+          </tr>
+        {% endif %}
+      {% endfor %}
+    </table>
+  </div>
+
+  {% if drawing %}
+    <h2>Drawings</h2>
+    {% for box_title, box_svg, box_caption in drawing %}
+      <div class="drawing">
+        <div class="drawing-title">{{ box_title }}</div>
+        {{ box_svg | safe }}
+        {% if box_caption %}<p class="drawing-caption">{{ box_caption | safe }}</p>{% endif %}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% macro unit_suffix(power) %}{% if power == 2 %}&sup2;{% elif power == 3 %}&sup3;{% endif %}{% endmacro %}
+  {% macro result_sections(sections) %}
+    {% for section_title, rows in sections %}
+      <div class="section-title">{{ section_title }}</div>
+      <table class="data">
+        {% for label, value, suffix in rows %}
+          <tr>
+            <td>{{ label }}</td>
+            <td class="value">{{ "{:,.2f}".format(value) }}</td>
+            <td class="unit">{% if suffix is string %}{{ suffix }}{% elif suffix > 0 %}{{ values.units }}{{ unit_suffix(suffix) }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endfor %}
+  {% endmacro %}
+
+  <h2>Results</h2>
+  {{ result_sections(results) }}
+
+  {% if detail_results %}
+    <h2>Engineering Breakdown</h2>
+    {{ result_sections(detail_results) }}
+  {% endif %}
+
+  <div class="report-foot">
+    <span>Generated by Dome Calculator</span>
+    <span>{{ today }}</span>
+  </div>
+</body>
+</html>
