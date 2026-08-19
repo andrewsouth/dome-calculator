@@ -432,17 +432,19 @@ def live_dead(v):
             mid_y = (channel(mid) + surface(abs(mid))) / 2
             body += f'<text x="{x_px(mid)}" y="{y_px(mid_y)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
             outer = max(abs(runs[0][0]), abs(runs[-1][-1]))
-            # Dashed marker at the top of the dead collar: the highest
-            # elevation where dead material sits against the dome shell
-            # (the funnel channel meets the product surface here; nothing
-            # dead remains above this line at the shell).
-            dead_top = surface(outer)
-            body += (
-                f'<line x1="{x_px(-outer)}" y1="{y_px(dead_top)}" '
-                f'x2="{x_px(outer)}" y2="{y_px(dead_top)}" {DASHED}/>'
-            )
         else:
             outer = 0.0
+
+        # Dashed marker at the dead pile / shell interaction: the height of
+        # the dead collar against the wall in this cut (the same level the
+        # isometric view's outer skirt shows). The dead surface at the wall
+        # is the funnel line clipped by the stored product surface.
+        dead_wall = min(channel(radius), surface(radius))
+        if dead_wall > total * 1e-6:
+            body += (
+                f'<line x1="{x_px(-radius)}" y1="{y_px(dead_wall)}" '
+                f'x2="{x_px(radius)}" y2="{y_px(dead_wall)}" {DASHED}/>'
+            )
         dead_mid = (outer + radius) / 2
         dead_y = y_px(0) - 6
         body += f'<text x="{x_px(-dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
