@@ -12,6 +12,7 @@ from geometry import (
     US_TON_TO_KG,
     dry_bulk_storage_dome,
     live_dead_storage,
+    optimize_hopper_layout,
     optimize_hopper_storage,
     dry_bulk_storage_sizer,
     ellipse,
@@ -42,8 +43,10 @@ UNIT_TO_M = {"ft": 0.3048, "in": 0.0254, "m": 1.0, "mm": 0.001}
 FREEBOARD_DEFAULTS = {"ft": 1.5, "in": 18.0, "m": 0.5, "mm": 500.0}
 # Default center-to-center spacing for multi-hopper layouts: 15 ft or 5 m.
 SPACING_DEFAULTS = {"ft": 15.0, "in": 180.0, "m": 5.0, "mm": 5000.0}
-# Default hopper opening for the Reclaim Optimizer: 4 ft or 1.2 m square.
+# Default hopper opening: 4 ft or 1.2 m square.
 OPENING_DEFAULTS = {"ft": 4.0, "in": 48.0, "m": 1.2, "mm": 1200.0}
+# Live vs. Dead spacing mode: enter the spacings, or solve for the best ones.
+SPACING_MODE_CHOICES = [("manual", "Enter spacing"), ("optimize", "Optimize for me")]
 
 
 def number_field(key, label, default):
@@ -65,11 +68,13 @@ def volume_field(key, label, default):
     return {"key": key, "label": label, "default": default, "kind": "number", "unit": "volume"}
 
 
-def select_field(key, label, default, choices, convert=False):
+def select_field(key, label, default, choices, convert=False, resubmit=False):
     """A dropdown field; convert=True marks unit selectors whose change
-    should convert the paired value in place (handled in the route)."""
+    should convert the paired value in place (handled in the route);
+    resubmit=True re-submits on change so the form can re-render (e.g. to
+    hide fields the selected mode makes irrelevant)."""
     return {"key": key, "label": label, "default": default, "kind": "select",
-            "choices": choices, "convert": convert}
+            "choices": choices, "convert": convert, "resubmit": resubmit}
 
 
 _ICON_STROKE = 'stroke="#444" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
@@ -236,6 +241,15 @@ def _validate_live_dead(v):
         return errors
 
     hoppers, tunnels = int(v["hoppers"]), int(v["tunnels"])
+    if v["spacing_mode"] == "optimize":
+        # Even at the tightest legal packing (openings touching), the
+        # outermost corner must fit inside the footprint, or no layout exists.
+        corner_x = (hoppers - 1) / 2 * v["opening_w"] + v["opening_w"] / 2
+        corner_y = (tunnels - 1) / 2 * v["opening_l"] + v["opening_l"] / 2
+        if math.hypot(corner_x, corner_y) >= v["diameter"] / 2:
+            errors.append("That many openings cannot fit inside the dome footprint — reduce counts or opening size.")
+        return errors
+
     if hoppers > 1 and v["hopper_spacing"] < v["opening_w"]:
         errors.append("Hopper spacing (center-to-center) must be at least the opening width, or openings overlap.")
     if tunnels > 1 and v["tunnel_spacing"] < v["opening_l"]:
@@ -249,19 +263,30 @@ def _validate_live_dead(v):
     return errors
 
 
-def _validate_reclaim_opt(v):
-    errors = _validate_reclaim_base(v)
-    if errors:
-        return errors
-
-    # Even at the tightest legal packing (openings touching), the outermost
-    # corner must fit inside the footprint, or no layout can exist.
-    hoppers, tunnels = int(v["hoppers"]), int(v["tunnels"])
-    corner_x = (hoppers - 1) / 2 * v["opening_w"] + v["opening_w"] / 2
-    corner_y = (tunnels - 1) / 2 * v["opening_l"] + v["opening_l"] / 2
-    if math.hypot(corner_x, corner_y) >= v["diameter"] / 2:
-        errors.append("That many openings cannot fit inside the dome footprint — reduce counts or opening size.")
-    return errors
+def _compute_live_dead(v):
+    """Compute for the merged Live vs. Dead card. In optimize mode the solved
+    spacings are written back into the form values, so the drawings render
+    the optimum and the spacings carry over if the user switches to manual."""
+    if v["spacing_mode"] == "optimize":
+        opt = optimize_hopper_layout(
+            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
+            v["freeboard"], v["opening_w"], v["opening_l"],
+            int(v["hoppers"]), int(v["tunnels"]),
+        )
+        v["hopper_spacing"] = opt["hopper_spacing"]
+        v["tunnel_spacing"] = opt["tunnel_spacing"]
+        return optimize_hopper_storage(
+            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
+            v["density"], v["density_unit"], v["units"], v["freeboard"],
+            v["opening_w"], v["opening_l"], v["hoppers"], v["tunnels"],
+            v["required_live"],
+        )
+    return live_dead_storage(
+        v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
+        v["density"], v["density_unit"], v["units"], v["freeboard"],
+        v["opening_w"], v["opening_l"], v["required_live"],
+        v["hoppers"], v["hopper_spacing"], v["tunnels"], v["tunnel_spacing"],
+    )
 
 
 def _validate_dry_bulk_sizer(v):
@@ -424,56 +449,17 @@ SHAPES = {
             plain_number_field("density", "Density", 75.0),
             select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
             number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
-            number_field("opening_w", "Opening Width", 5.0),
-            number_field("opening_l", "Opening Length", 5.0),
-            count_field("hoppers", "Hoppers per Tunnel", 1.0),
-            number_field("hopper_spacing", "Hopper Spacing", SPACING_DEFAULTS),
-            count_field("tunnels", "Tunnels", 1.0),
-            number_field("tunnel_spacing", "Tunnel Spacing", SPACING_DEFAULTS),
-            plain_number_field("required_live", "Target Live", 0.0, "%"),
-        ],
-        "validate": _validate_live_dead,
-        "compute": lambda v: live_dead_storage(
-            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
-            v["density"], v["density_unit"], v["units"], v["freeboard"],
-            v["opening_w"], v["opening_l"], v["required_live"],
-            v["hoppers"], v["hopper_spacing"], v["tunnels"], v["tunnel_spacing"],
-        ),
-    },
-    "reclaim_opt": {
-        "label": "Reclaim Optimizer",
-        "category": "storage",
-        "detail_prefixes": [
-            "Cone @", "Portion above cone", "Frustum below cone",
-            "Floor:", "Dome:", "Stem Wall:", "Total:",
-        ],
-        "diagram": diagrams.live_dead(),
-        "iso": iso.dry_bulk_calculator(),
-        "draw": drawings.reclaim_optimizer,
-        "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True, funnel=True, dashed=True),
-        "icon_small": _dome_icon(dome_ry=30),
-        "fields": [
-            number_field("diameter", "Diameter", 60.0),
-            number_field("height", "Height", 30.0),
-            number_field("stem_wall", "Stem Wall", 30.0),
-            plain_number_field("angle", "Angle of Repose", 25.0, "°"),
-            plain_number_field("drawdown", "Drawdown Angle", 30.0, "°"),
-            plain_number_field("density", "Density", 75.0),
-            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
-            number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
             number_field("opening_w", "Opening Width", OPENING_DEFAULTS),
             number_field("opening_l", "Opening Length", OPENING_DEFAULTS),
             count_field("hoppers", "Hoppers per Tunnel", 3.0),
             count_field("tunnels", "Tunnels", 2.0),
+            select_field("spacing_mode", "Spacing", "manual", SPACING_MODE_CHOICES, resubmit=True),
+            {**number_field("hopper_spacing", "Hopper Spacing", SPACING_DEFAULTS), "manual_only": True},
+            {**number_field("tunnel_spacing", "Tunnel Spacing", SPACING_DEFAULTS), "manual_only": True},
             plain_number_field("required_live", "Target Live", 0.0, "%"),
         ],
-        "validate": _validate_reclaim_opt,
-        "compute": lambda v: optimize_hopper_storage(
-            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
-            v["density"], v["density_unit"], v["units"], v["freeboard"],
-            v["opening_w"], v["opening_l"], v["hoppers"], v["tunnels"],
-            v["required_live"],
-        ),
+        "validate": _validate_live_dead,
+        "compute": _compute_live_dead,
     },
 }
 

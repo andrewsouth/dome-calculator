@@ -122,11 +122,16 @@
         </select>
       </div>
       {% for field in shapes[shape_key].fields %}
+        {% if field.manual_only and values.get("spacing_mode") == "optimize" %}
+          {# Hidden in optimize mode (the tool solves these), but still
+             submitted so the values survive mode and unit switches. #}
+          <input type="hidden" name="{{ field.key }}" value="{{ '{:,.2f}'.format(values[field.key]) }}">
+        {% else %}
         <div class="field">
           {% if field.kind == "select" %}
             <label for="{{ field.key }}">{{ field.label }}</label>
             {% if field.convert %}<input type="hidden" name="prev_{{ field.key }}" value="{{ values[field.key] }}">{% endif %}
-            <select id="{{ field.key }}" name="{{ field.key }}"{% if field.convert %} onchange="this.form.submit()"{% endif %}>
+            <select id="{{ field.key }}" name="{{ field.key }}"{% if field.convert or field.resubmit %} onchange="this.form.submit()"{% endif %}>
               {% for choice_value, choice_label in field.choices %}
                 <option value="{{ choice_value }}" {% if choice_value == values[field.key] %}selected{% endif %}>{{ choice_label }}</option>
               {% endfor %}
@@ -138,6 +143,7 @@
             <input type="text" inputmode="decimal" id="{{ field.key }}" name="{{ field.key }}" value="{{ '{:,.0f}'.format(values[field.key]) if field.integer and values[field.key] % 1 == 0 else '{:,.2f}'.format(values[field.key]) }}">
           {% endif %}
         </div>
+        {% endif %}
       {% endfor %}
       <button type="submit" name="go" value="1">Calculate</button>
     </form>

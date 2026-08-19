@@ -15,7 +15,6 @@ from geometry import (
     dry_bulk_geometry,
     hopper_layout,
     live_dead_reclaim,
-    optimize_hopper_layout,
     solve_dry_bulk_dome_radius,
 )
 
@@ -616,18 +615,3 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
 
     height_px = oy + 0.7071 * R * scale + 16
     return _svg(body, 300, height_px)
-
-
-def reclaim_optimizer(v):
-    """Drawings for the Reclaim Optimizer: the standard live/dead views,
-    rendered at the optimal spacings (the optimization run is cached, so
-    this shares the result the compute step already found)."""
-    opt = optimize_hopper_layout(
-        v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
-        v["freeboard"], v["opening_w"], v["opening_l"],
-        int(v["hoppers"]), int(v["tunnels"]),
-    )
-    at_optimum = dict(v)
-    at_optimum["hopper_spacing"] = opt["hopper_spacing"]
-    at_optimum["tunnel_spacing"] = opt["tunnel_spacing"]
-    return live_dead(at_optimum)
