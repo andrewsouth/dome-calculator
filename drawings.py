@@ -652,10 +652,14 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
         point_str = " ".join(f"{px},{py}" for px, py in pts)
         body += f'<polygon points="{point_str}" fill="{fill}" stroke="{fill}" stroke-width="0.5"/>'
 
-    # Ghost of the shell: base ring, wall silhouette, springline, dome
-    # latitudes, and apex marker -- all in the same projection, kept faint
-    # so the structure reads without competing with the surface.
+    # Shell rendering: a solid silhouette outline (walls + the dome's
+    # visible limb) so the structure reads like it does in the sections,
+    # a springline ring for the wall/dome joint, and two faint meridian
+    # ribs for curvature -- meridians stay visibly curved at this low
+    # camera angle where latitude circles collapse flat.
     ghost_style = 'stroke="#c9c9c9" stroke-width="1.1" fill="none" stroke-dasharray="5,4"'
+    rib_style = 'stroke="#d4d4d4" stroke-width="1" fill="none"'
+    sphere_center = stem_wall + dome_height - curvature
 
     def ring_ghost(r, z, style):
         return (
@@ -665,19 +669,51 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
 
     ghost = ring_ghost(R, 0.0, STRUCT_THIN)
     ghost += ring_ghost(R, stem_wall, ghost_style)
+
+    # Meridian ribs through the apex at two plan azimuths.
+    psi_max = math.acos(max(-1.0, min(1.0, (curvature - dome_height) / curvature)))
+    for alpha in (math.radians(45), math.radians(135)):
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        rib = []
+        for k in range(-24, 25):
+            psi = psi_max * k / 24
+            r = curvature * math.sin(psi)
+            z = sphere_center + curvature * math.cos(psi)
+            rib.append(project(r * ca, r * sa, z))
+        ghost += (
+            '<polyline points="'
+            + " ".join(f"{px},{py}" for px, py in rib)
+            + f'" {rib_style}/>'
+        )
+
+    # Wall silhouette edges.
     u_edge = R * scale
     for side in (-1, 1):
         ghost += (
             f'<line x1="{ox + side * u_edge:.1f}" y1="{oy}" '
-            f'x2="{ox + side * u_edge:.1f}" y2="{round(oy - stem_wall * z_scale, 1)}" {ghost_style}/>'
+            f'x2="{ox + side * u_edge:.1f}" y2="{round(oy - stem_wall * z_scale, 1)}" {STRUCT_THIN}/>'
         )
-    sphere_center = stem_wall + dome_height - curvature
-    for fraction in (0.45, 0.8):
-        z = stem_wall + dome_height * fraction
+
+    # Dome outline: the shell's visible limb from this camera. The z axis
+    # is scaled independently of the plan, so it's found numerically --
+    # project a dense cloud of shell points and keep the upper envelope
+    # per screen column, wall top to wall top.
+    n_cols = 125
+    env = [None] * n_cols
+    for i in range(41):
+        z = stem_wall + dome_height * i / 40
         r = math.sqrt(max(curvature ** 2 - (z - sphere_center) ** 2, 0.0))
-        ghost += ring_ghost(r, z, ghost_style)
-    apex_y = round(oy - total * z_scale, 1)
-    ghost += f'<circle cx="{ox}" cy="{apex_y}" r="1.6" fill="#bbb"/>'
+        for j in range(144):
+            th = 2 * math.pi * j / 144
+            px, py = project(r * math.cos(th), r * math.sin(th), z)
+            c = round((px - (ox - u_edge)) / (2 * u_edge) * (n_cols - 1))
+            if 0 <= c < n_cols and (env[c] is None or py < env[c]):
+                env[c] = py
+    outline = " ".join(
+        f"{ox - u_edge + 2 * u_edge * c / (n_cols - 1):.1f},{env[c]:.1f}"
+        for c in range(n_cols) if env[c] is not None
+    )
+    ghost += f'<polyline points="{outline}" {STRUCT_THIN}/>'
     body += ghost
 
     # Legend: the plan heatmap's gradient, 0 to the deepest dead pile.
