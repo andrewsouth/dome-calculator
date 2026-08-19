@@ -406,16 +406,6 @@ def live_dead(v):
                 'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
             )
 
-        # Dashed marker at the highest product/shell contact: the repose
-        # cone meets the dome shell along this circle, so nothing is stored
-        # above this elevation except the cone peak itself.
-        cone_r, trans = core["cone_radius"], core["transition_height"]
-        if cone_r > 0:
-            body += (
-                f'<line x1="{x_px(-cone_r)}" y1="{y_px(trans)}" '
-                f'x2="{x_px(cone_r)}" y2="{y_px(trans)}" {DASHED}/>'
-            )
-
         # Red opening marks: every hopper the cut passes through.
         for ocx, ocy, w, l in openings:
             if along_x:
@@ -442,6 +432,15 @@ def live_dead(v):
             mid_y = (channel(mid) + surface(abs(mid))) / 2
             body += f'<text x="{x_px(mid)}" y="{y_px(mid_y)}" text-anchor="middle" fill="#2c4a7c" {label}>LIVE</text>'
             outer = max(abs(runs[0][0]), abs(runs[-1][-1]))
+            # Dashed marker at the top of the dead collar: the highest
+            # elevation where dead material sits against the dome shell
+            # (the funnel channel meets the product surface here; nothing
+            # dead remains above this line at the shell).
+            dead_top = surface(outer)
+            body += (
+                f'<line x1="{x_px(-outer)}" y1="{y_px(dead_top)}" '
+                f'x2="{x_px(outer)}" y2="{y_px(dead_top)}" {DASHED}/>'
+            )
         else:
             outer = 0.0
         dead_mid = (outer + radius) / 2
