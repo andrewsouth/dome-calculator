@@ -373,11 +373,11 @@ def live_dead(v):
     # Below-grade reclaim tunnel: width = 3x the opening's across-tunnel
     # dimension, cross-section a half-circle arc on vertical walls, and the
     # total height (tunnel floor to arc apex) equal to the total width. The
-    # apex sits one hopper width below the dome floor -- the hopper drop
+    # apex sits half a hopper width below the dome floor -- the hopper drop
     # between the floor opening and the tunnel crown.
     tunnel_w = 3.0 * open_l
     tunnel_r = tunnel_w / 2
-    hopper_drop = open_w
+    hopper_drop = open_w / 2
     below_grade = hopper_drop + tunnel_w
 
     def section_panel(cut, along_x):
