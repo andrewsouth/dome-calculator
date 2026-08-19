@@ -67,14 +67,16 @@ def _person(x_px, y_px, scale, x_world, units):
     )
 
 
-def _ground_shape_frame(half_width, top_height, units):
+def _ground_shape_frame(half_width, top_height, units, below=0.0):
     """Common mapper setup for shapes that sit on a ground line, leaving room
-    for the person to the right. Returns (scale, X, Y, svg_closer, width)."""
+    for the person to the right; `below` extends the frame under grade (for
+    below-floor structures like reclaim tunnels).
+    Returns (scale, X, Y, svg_closer, width)."""
     person_h = PERSON_HEIGHT[units]
     person_x = half_width + 0.45 * person_h
     xmin, xmax = -half_width, half_width + 0.9 * person_h
     ymax = max(top_height, person_h)
-    scale, width, height, x_px, y_px = _mapper(xmin, xmax, 0, ymax)
+    scale, width, height, x_px, y_px = _mapper(xmin, xmax, -below, ymax)
 
     ground = f'<line x1="{x_px(xmin)}" y1="{y_px(0)}" x2="{x_px(xmax)}" y2="{y_px(0)}" {STRUCT}/>'
 
@@ -368,6 +370,13 @@ def live_dead(v):
             for cx, cy, w, l in openings
         )
 
+    # Below-grade reclaim tunnel: width = 3x the opening's across-tunnel
+    # dimension, cross-section a half-circle arc on vertical walls, and the
+    # total height (tunnel floor to arc apex) equal to the total width. The
+    # apex meets the dome floor, where the hopper openings feed it.
+    tunnel_w = 3.0 * open_l
+    tunnel_r = tunnel_w / 2
+
     def section_panel(cut, along_x):
         """One to-scale section through the pile. along_x=True cuts along a
         tunnel line (the center tunnel, or the first tunnel off-center when
@@ -375,7 +384,7 @@ def live_dead(v):
         along_x=False is the 90-degree cut across the tunnels through a
         hopper row, showing one funnel per tunnel. Adjacent funnels merge
         where the channel stays below the product surface between openings."""
-        scale, x_px, y_px, close, _width = _ground_shape_frame(radius, total, units)
+        scale, x_px, y_px, close, _width = _ground_shape_frame(radius, total, units, below=tunnel_w)
         body = f'<polygon points="{_polygon_str(_pile_outline(core, stem_wall, dome_height), x_px, y_px)}" {PILE}/>'
 
         def channel(s):
@@ -405,6 +414,30 @@ def live_dead(v):
                 f'<polygon points="{_polygon_str(pts, x_px, y_px)}" '
                 'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
             )
+
+        # The tunnel below grade. Across the tunnels: each shows its true
+        # cross-section (arch on walls, floor at -tunnel_w). Along the
+        # tunnel: the longitudinal void under the full run, dashed at the
+        # drawing edges where the tunnel continues past the section.
+        if along_x:
+            body += (
+                f'<line x1="{x_px(-radius)}" y1="{y_px(-tunnel_w)}" '
+                f'x2="{x_px(radius)}" y2="{y_px(-tunnel_w)}" {STRUCT_THIN}/>'
+            )
+            for side in (-radius, radius):
+                body += (
+                    f'<line x1="{x_px(side)}" y1="{y_px(0)}" '
+                    f'x2="{x_px(side)}" y2="{y_px(-tunnel_w)}" {DASHED}/>'
+                )
+        else:
+            for t_c in sorted({ocy for _ocx, ocy, _w, _l in openings}):
+                r_px = tunnel_r * scale
+                body += (
+                    f'<path d="M{x_px(t_c - tunnel_r)} {y_px(-tunnel_w)} '
+                    f'L{x_px(t_c - tunnel_r)} {y_px(-tunnel_r)} '
+                    f'A{r_px:.1f} {r_px:.1f} 0 0 1 {x_px(t_c + tunnel_r)} {y_px(-tunnel_r)} '
+                    f'L{x_px(t_c + tunnel_r)} {y_px(-tunnel_w)} Z" {STRUCT_THIN}/>'
+                )
 
         # Red opening marks: every hopper the cut passes through.
         for ocx, ocy, w, l in openings:
