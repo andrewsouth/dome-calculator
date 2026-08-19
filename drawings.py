@@ -435,16 +435,24 @@ def live_dead(v):
         else:
             outer = 0.0
 
-        # Dashed marker at the dead pile / shell interaction: the height of
-        # the dead collar against the wall in this cut (the same level the
-        # isometric view's outer skirt shows). The dead surface at the wall
-        # is the funnel line clipped by the stored product surface.
-        dead_wall = min(channel(radius), surface(radius))
-        if dead_wall > total * 1e-6:
-            body += (
-                f'<line x1="{x_px(-radius)}" y1="{y_px(dead_wall)}" '
-                f'x2="{x_px(radius)}" y2="{y_px(dead_wall)}" {DASHED}/>'
-            )
+        # Dashed hidden line: the dead pile's contact along the dome wall
+        # BEYOND the cut plane, projected onto the section (the same collar
+        # the isometric's outer skirt shows). At each horizontal position s
+        # the wall point behind the plane is (s, y_w) -- or (x_w, s) for the
+        # across cut -- and the dead height there is the funnel surface
+        # clipped by the stored product surface (= stem wall top at the
+        # wall). The collar is shortest toward the hoppers and taller
+        # around the rest of the perimeter, so it reads as an arc.
+        wall_top = surface(radius)
+        wall_pts = []
+        m = 120
+        for i in range(m + 1):
+            s = -radius + 2 * radius * i / m
+            far = math.sqrt(max(radius * radius - s * s, 0.0))
+            wx, wy = (s, far) if along_x else (far, s)
+            wall_pts.append((s, min(channel_at(wx, wy), wall_top)))
+        if max(h for _s, h in wall_pts) > total * 1e-6:
+            body += f'<polyline points="{_polygon_str(wall_pts, x_px, y_px)}" {DASHED}/>'
         dead_mid = (outer + radius) / 2
         dead_y = y_px(0) - 6
         body += f'<text x="{x_px(-dead_mid)}" y="{dead_y}" text-anchor="middle" fill="#777" {label}>DEAD</text>'
