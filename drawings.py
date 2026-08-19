@@ -406,6 +406,16 @@ def live_dead(v):
                 'fill="#b5cbe8" stroke="#44608c" stroke-width="1.2" stroke-linejoin="round"/>'
             )
 
+        # Dashed marker at the highest product/shell contact: the repose
+        # cone meets the dome shell along this circle, so nothing is stored
+        # above this elevation except the cone peak itself.
+        cone_r, trans = core["cone_radius"], core["transition_height"]
+        if cone_r > 0:
+            body += (
+                f'<line x1="{x_px(-cone_r)}" y1="{y_px(trans)}" '
+                f'x2="{x_px(cone_r)}" y2="{y_px(trans)}" {DASHED}/>'
+            )
+
         # Red opening marks: every hopper the cut passes through.
         for ocx, ocy, w, l in openings:
             if along_x:
@@ -546,8 +556,8 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
     and spokes render the crater and rim smoothly, steep faces darken by
     slope for consistent cliff shading, an outer skirt closes the collar's
     face at the wall, and a faint wireframe ghost of the shell shows the
-    structure in the same projection. The camera sits high (45 degrees) with
-    a slight yaw, so the tunnel axis reads left-to-right across the screen
+    structure in the same projection. The camera sits at a 25-degree
+    elevation with a slight yaw, so the tunnel axis reads left-to-right
     (matching the Along Tunnel section) and the wall collar doesn't hide
     the crater rows behind it."""
     R, total = core["radius"], stem_wall + dome_height
@@ -574,11 +584,11 @@ def _dead_pile_iso(core, stem_wall, dome_height, surface_fn, t_dd, openings, uni
     zmax = max(z for ring in nodes for _x, _y, z in ring) or 1.0
 
     # Camera: 18-degree yaw (tunnels nearly horizontal on screen, a touch of
-    # recession for depth), 45-degree elevation (plan depth foreshortened by
-    # sin 45). u runs across the screen, w toward the viewer (painter sort).
+    # recession for depth), 25-degree elevation (plan depth foreshortened by
+    # sin 25). u runs across the screen, w toward the viewer (painter sort).
     yaw = math.radians(18)
     cos_y, sin_y = math.cos(yaw), math.sin(yaw)
-    elev = 0.7071  # sin(45 deg)
+    elev = math.sin(math.radians(25))
     scale = 250.0 / (2 * R)
     z_scale = min(scale, 118.0 / total)
     legend_h = 58
