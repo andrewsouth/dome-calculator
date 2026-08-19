@@ -463,3 +463,80 @@ def test_live_dead_storage_multi_hopper_recovers_more_than_single():
     assert "6 ×" in title and "3 per tunnel × 2 tunnels" in title
     labels = [label for label, _v, _s in multi_rows]
     assert "Hopper Spacing (c-c)" in labels and "Tunnel Spacing (c-c)" in labels
+
+
+def test_live_volume_grid_matches_reference_integration():
+    from geometry import _dry_bulk_core, _live_volume_grid, hopper_layout, live_dead_reclaim
+    import math
+
+    kwargs = dict(diameter=60.0, dome_height=30.0, stem_wall=30.0,
+                  repose_deg=37.0, drawdown_deg=70.0, freeboard=1.5)
+    openings = hopper_layout(4.0, 4.0, hoppers=3, hopper_spacing=15.0,
+                             tunnels=2, tunnel_spacing=18.0)
+    reference = live_dead_reclaim(openings=openings, samples=280, **kwargs)
+
+    core = _dry_bulk_core(kwargs["diameter"], kwargs["dome_height"],
+                          kwargs["stem_wall"], kwargs["repose_deg"], kwargs["freeboard"])
+    fast = _live_volume_grid(core, kwargs["stem_wall"], kwargs["dome_height"],
+                             math.tan(math.radians(70.0)), openings, samples=280)
+    # Same midpoint integration, different implementation: near-exact match.
+    assert fast == pytest.approx(reference["live_volume"], rel=1e-9)
+
+
+def test_optimize_hopper_layout_beats_naive_spacings():
+    from geometry import hopper_layout, live_dead_reclaim, optimize_hopper_layout
+
+    dome = dict(diameter=60.0, dome_height=30.0, stem_wall=30.0,
+                repose_deg=37.0, drawdown_deg=70.0, freeboard=1.5)
+    opt = optimize_hopper_layout(opening_w=4.0, opening_l=4.0, hoppers=3, tunnels=1, **dome)
+    hs = opt["hopper_spacing"]
+    radius = opt["reclaim"]["core"]["radius"]
+
+    # Feasible: no overlap, outermost opening inside the footprint.
+    assert hs >= 4.0
+    assert hs + 2.0 <= radius  # outer edge of the end hopper
+    best = opt["reclaim"]["live_volume"]
+
+    def live_at(spacing):
+        return live_dead_reclaim(
+            openings=hopper_layout(4.0, 4.0, 3, spacing, 1, 0.0), **dome
+        )["live_volume"]
+
+    # The optimum should beat (or match, within search tolerance) both a
+    # touching layout and the widest layout that fits.
+    widest = 2 * (radius * 0.999 - 2.0) / 2
+    assert best >= live_at(4.0) * 0.995
+    assert best >= live_at(widest) * 0.995
+
+
+def test_optimize_hopper_storage_sections():
+    from geometry import optimize_hopper_storage
+
+    sections = optimize_hopper_storage(
+        diameter=60.0, dome_height=30.0, stem_wall=30.0, repose_deg=37.0,
+        drawdown_deg=70.0, density=75.0, density_unit="lbs/ft3", length_unit="ft",
+        freeboard=1.5, opening_w=4.0, opening_l=4.0, hoppers=3, tunnels=2,
+        required_live=50.0,
+    )
+    titles = [title for title, _rows in sections]
+    assert "Optimized Layout" in titles and "Live Storage Check" in titles
+
+    layout_rows = _section(sections, "Optimized Layout")
+    labels = [label for label, _v, _s in layout_rows]
+    assert labels == [
+        "Hopper Spacing (c-c)", "Tunnel Spacing (c-c)",
+        "Extent Along Tunnel", "Extent Across Tunnels",
+    ]
+    hs = _value(layout_rows, "Hopper Spacing (c-c)")
+    ts = _value(layout_rows, "Tunnel Spacing (c-c)")
+    assert hs >= 4.0 and ts >= 4.0
+    assert _value(layout_rows, "Extent Along Tunnel") == pytest.approx(2 * hs + 4.0)
+    assert _value(layout_rows, "Extent Across Tunnels") == pytest.approx(ts + 4.0)
+
+    # Spacing rows moved out of the Reclaim section; live+dead still totals.
+    reclaim_rows = _section_starting_with(sections, "Reclaim")
+    assert not any("Spacing (c-c)" in label for label, _v, _s in reclaim_rows)
+    product = _value(_section(sections, "Product"), "Volume")
+    live = _value(reclaim_rows, "Live Volume")
+    dead = _value(reclaim_rows, "Dead Volume")
+    assert live + dead == pytest.approx(product)

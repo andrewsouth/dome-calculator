@@ -12,6 +12,7 @@ from geometry import (
     US_TON_TO_KG,
     dry_bulk_storage_dome,
     live_dead_storage,
+    optimize_hopper_storage,
     dry_bulk_storage_sizer,
     ellipse,
     ellipsoid_dome,
@@ -41,6 +42,8 @@ UNIT_TO_M = {"ft": 0.3048, "in": 0.0254, "m": 1.0, "mm": 0.001}
 FREEBOARD_DEFAULTS = {"ft": 1.5, "in": 18.0, "m": 0.5, "mm": 500.0}
 # Default center-to-center spacing for multi-hopper layouts: 15 ft or 5 m.
 SPACING_DEFAULTS = {"ft": 15.0, "in": 180.0, "m": 5.0, "mm": 5000.0}
+# Default hopper opening for the Reclaim Optimizer: 4 ft or 1.2 m square.
+OPENING_DEFAULTS = {"ft": 4.0, "in": 48.0, "m": 1.2, "mm": 1200.0}
 
 
 def number_field(key, label, default):
@@ -204,7 +207,9 @@ def _validate_dry_bulk_calculator(v):
     return errors
 
 
-def _validate_live_dead(v):
+def _validate_reclaim_base(v):
+    """Checks shared by Live vs. Dead and the Reclaim Optimizer: dome, angles,
+    opening size, target live, and whole-number hopper/tunnel counts."""
     errors = _validate_dry_bulk_calculator(v)
     if not (v["angle"] < v["drawdown"] < 90):
         errors.append("Drawdown angle must be steeper than the angle of repose and less than 90 degrees.")
@@ -220,12 +225,17 @@ def _validate_live_dead(v):
         errors.append("Hoppers per tunnel must be a whole number of 1 or more.")
     if tunnels != int(tunnels) or tunnels < 1:
         errors.append("Tunnels must be a whole number of 1 or more.")
+    if not errors and int(hoppers) * int(tunnels) > 40:
+        errors.append("Layout is limited to 40 openings total (hoppers per tunnel × tunnels).")
+    return errors
+
+
+def _validate_live_dead(v):
+    errors = _validate_reclaim_base(v)
     if errors:
         return errors
 
-    hoppers, tunnels = int(hoppers), int(tunnels)
-    if hoppers * tunnels > 40:
-        errors.append("Layout is limited to 40 openings total (hoppers per tunnel × tunnels).")
+    hoppers, tunnels = int(v["hoppers"]), int(v["tunnels"])
     if hoppers > 1 and v["hopper_spacing"] < v["opening_w"]:
         errors.append("Hopper spacing (center-to-center) must be at least the opening width, or openings overlap.")
     if tunnels > 1 and v["tunnel_spacing"] < v["opening_l"]:
@@ -236,6 +246,21 @@ def _validate_live_dead(v):
         corner_y = (tunnels - 1) / 2 * v["tunnel_spacing"] + v["opening_l"] / 2
         if math.hypot(corner_x, corner_y) >= v["diameter"] / 2:
             errors.append("Hopper layout extends beyond the dome footprint — reduce counts or spacing.")
+    return errors
+
+
+def _validate_reclaim_opt(v):
+    errors = _validate_reclaim_base(v)
+    if errors:
+        return errors
+
+    # Even at the tightest legal packing (openings touching), the outermost
+    # corner must fit inside the footprint, or no layout can exist.
+    hoppers, tunnels = int(v["hoppers"]), int(v["tunnels"])
+    corner_x = (hoppers - 1) / 2 * v["opening_w"] + v["opening_w"] / 2
+    corner_y = (tunnels - 1) / 2 * v["opening_l"] + v["opening_l"] / 2
+    if math.hypot(corner_x, corner_y) >= v["diameter"] / 2:
+        errors.append("That many openings cannot fit inside the dome footprint — reduce counts or opening size.")
     return errors
 
 
@@ -413,6 +438,41 @@ SHAPES = {
             v["density"], v["density_unit"], v["units"], v["freeboard"],
             v["opening_w"], v["opening_l"], v["required_live"],
             v["hoppers"], v["hopper_spacing"], v["tunnels"], v["tunnel_spacing"],
+        ),
+    },
+    "reclaim_opt": {
+        "label": "Reclaim Optimizer",
+        "category": "storage",
+        "detail_prefixes": [
+            "Cone @", "Portion above cone", "Frustum below cone",
+            "Floor:", "Dome:", "Stem Wall:", "Total:",
+        ],
+        "diagram": diagrams.live_dead(),
+        "iso": iso.dry_bulk_calculator(),
+        "draw": drawings.reclaim_optimizer,
+        "icon": _dome_icon(dome_ry=30, stem_wall=True, pile=True, funnel=True, dashed=True),
+        "icon_small": _dome_icon(dome_ry=30),
+        "fields": [
+            number_field("diameter", "Diameter", 60.0),
+            number_field("height", "Height", 30.0),
+            number_field("stem_wall", "Stem Wall", 30.0),
+            plain_number_field("angle", "Angle of Repose", 25.0, "°"),
+            plain_number_field("drawdown", "Drawdown Angle", 30.0, "°"),
+            plain_number_field("density", "Density", 75.0),
+            select_field("density_unit", "Density Unit", "lbs/ft3", DENSITY_UNIT_CHOICES, convert=True),
+            number_field("freeboard", "Freeboard", FREEBOARD_DEFAULTS),
+            number_field("opening_w", "Opening Width", OPENING_DEFAULTS),
+            number_field("opening_l", "Opening Length", OPENING_DEFAULTS),
+            count_field("hoppers", "Hoppers per Tunnel", 3.0),
+            count_field("tunnels", "Tunnels", 2.0),
+            plain_number_field("required_live", "Target Live", 0.0, "%"),
+        ],
+        "validate": _validate_reclaim_opt,
+        "compute": lambda v: optimize_hopper_storage(
+            v["diameter"], v["height"], v["stem_wall"], v["angle"], v["drawdown"],
+            v["density"], v["density_unit"], v["units"], v["freeboard"],
+            v["opening_w"], v["opening_l"], v["hoppers"], v["tunnels"],
+            v["required_live"],
         ),
     },
 }

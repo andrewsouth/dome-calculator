@@ -1,4 +1,5 @@
 import math
+from functools import lru_cache
 
 # Each result row is (label, value, unit_suffix). unit_suffix is either an int
 # -- how many times the shape's chosen length unit is applied (0 = dimensionless,
@@ -798,4 +799,161 @@ def live_dead_storage(
             ("Margin", provided_share - required_live, "%"),
         ]))
 
+    return sections
+
+
+# -- Reclaim layout optimizer. Given the dome, the opening size, and how many
+# hoppers and tunnels, find the center-to-center spacings that maximize live
+# volume. The search evaluates a fast quadrant-symmetric copy of the live
+# integral at reduced resolution, zooming a grid around the best point, then
+# confirms the winner at full resolution with live_dead_reclaim.
+
+
+def _live_volume_grid(core, stem_wall, dome_height, t_dd, openings, samples):
+    """Live volume by quadrant integration, tuned for the optimizer's inner
+    loop: openings are pre-reduced to the non-negative quadrant (for a
+    both-axis-symmetric layout the nearest opening to a first-quadrant point
+    always has cx, cy >= 0) and the distance math is inlined."""
+    radius = core["radius"]
+    quad = [(cx, cy, w / 2, l / 2) for cx, cy, w, l in openings
+            if cx >= -1e-9 and cy >= -1e-9]
+    cone_r, apex = core["cone_radius"], core["pile_apex_height"]
+    slope = (apex - core["transition_height"]) / cone_r if cone_r else 0.0
+    curv, total = core["radius_of_curvature"], stem_wall + dome_height
+    center_y = total - curv
+    step = radius / samples
+    r2max = radius * radius
+    live = 0.0
+    for i in range(samples):
+        x = (i + 0.5) * step
+        for j in range(samples):
+            y = (j + 0.5) * step
+            rr = x * x + y * y
+            if rr > r2max:
+                break  # y only grows from here
+            r = math.sqrt(rr)
+            if r <= cone_r:
+                surface = apex - slope * r
+            else:
+                surface = min(total, center_y + math.sqrt(max(curv * curv - rr, 0.0)))
+            best = -1.0
+            for cx, cy, hw, hl in quad:
+                dx = abs(x - cx) - hw
+                if dx < 0.0:
+                    dx = 0.0
+                dy = abs(y - cy) - hl
+                if dy < 0.0:
+                    dy = 0.0
+                d = math.sqrt(dx * dx + dy * dy)
+                if best < 0.0 or d < best:
+                    best = d
+            depth = surface - t_dd * best
+            if depth > 0.0:
+                live += depth
+    return live * step * step * 4
+
+
+@lru_cache(maxsize=64)
+def optimize_hopper_layout(diameter, dome_height, stem_wall, repose_deg, drawdown_deg,
+                           freeboard, opening_w, opening_l, hoppers, tunnels):
+    """Best (hopper_spacing, tunnel_spacing) for live volume. Cached so the
+    results table and the drawings share one optimization run."""
+    hoppers, tunnels = int(hoppers), int(tunnels)
+    core = _dry_bulk_core(diameter, dome_height, stem_wall, repose_deg, freeboard)
+    radius = core["radius"]
+    t_dd = math.tan(math.radians(drawdown_deg))
+    r_fit = radius * 0.999  # keep the outermost corner strictly inside
+
+    def fits(hs, ts):
+        corner_x = (hoppers - 1) / 2 * hs + opening_w / 2
+        corner_y = (tunnels - 1) / 2 * ts + opening_l / 2
+        return math.hypot(corner_x, corner_y) <= r_fit
+
+    def hs_cap(ts):
+        corner_y = (tunnels - 1) / 2 * ts + opening_l / 2
+        room = math.sqrt(max(r_fit ** 2 - corner_y ** 2, 0.0)) - opening_w / 2
+        return max(2 * room / (hoppers - 1), opening_w) if hoppers > 1 else 0.0
+
+    def ts_cap(hs):
+        corner_x = (hoppers - 1) / 2 * hs + opening_w / 2
+        room = math.sqrt(max(r_fit ** 2 - corner_x ** 2, 0.0)) - opening_l / 2
+        return max(2 * room / (tunnels - 1), opening_l) if tunnels > 1 else 0.0
+
+    def evaluate(hs, ts, samples):
+        openings = hopper_layout(opening_w, opening_l, hoppers, hs, tunnels, ts)
+        return _live_volume_grid(core, stem_wall, dome_height, t_dd, openings, samples)
+
+    hs_best, ts_best = 0.0, 0.0
+    if hoppers > 1 or tunnels > 1:
+        lo_h, hi_h = (opening_w, hs_cap(opening_l if tunnels > 1 else 0.0)) if hoppers > 1 else (0.0, 0.0)
+        lo_t, hi_t = (opening_l, ts_cap(opening_w if hoppers > 1 else 0.0)) if tunnels > 1 else (0.0, 0.0)
+        best_val = -1.0
+        for n_pts, samples in ((9, 60), (7, 90), (5, 140)):
+            hs_vals = ([lo_h + (hi_h - lo_h) * i / (n_pts - 1) for i in range(n_pts)]
+                       if hoppers > 1 else [0.0])
+            ts_vals = ([lo_t + (hi_t - lo_t) * i / (n_pts - 1) for i in range(n_pts)]
+                       if tunnels > 1 else [0.0])
+            for hs in hs_vals:
+                for ts in ts_vals:
+                    if not fits(hs, ts):
+                        continue
+                    val = evaluate(hs, ts, samples)
+                    if val > best_val:
+                        best_val, hs_best, ts_best = val, hs, ts
+            # Zoom the next grid to one coarse step either side of the best.
+            if hoppers > 1:
+                span = (hi_h - lo_h) / (n_pts - 1)
+                lo_h = max(opening_w, hs_best - span)
+                hi_h = min(hs_cap(ts_best), hs_best + span)
+            if tunnels > 1:
+                span = (hi_t - lo_t) / (n_pts - 1)
+                lo_t = max(opening_l, ts_best - span)
+                hi_t = min(ts_cap(hs_best), ts_best + span)
+
+    reclaim = live_dead_reclaim(
+        diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard,
+        hopper_layout(opening_w, opening_l, hoppers, hs_best, tunnels, ts_best),
+    )
+    return {"hopper_spacing": hs_best, "tunnel_spacing": ts_best, "reclaim": reclaim}
+
+
+def optimize_hopper_storage(
+    diameter, dome_height, stem_wall, repose_deg, drawdown_deg, density, density_unit,
+    length_unit, freeboard, opening_w, opening_l, hoppers, tunnels, required_live=0.0,
+):
+    """Result sections for the Reclaim Optimizer: the optimal spacings lead,
+    then the standard live/dead breakdown evaluated at that layout."""
+    if drawdown_deg <= repose_deg:
+        raise ValueError("Drawdown angle must be steeper than the angle of repose.")
+
+    hoppers, tunnels = int(hoppers), int(tunnels)
+    opt = optimize_hopper_layout(
+        diameter, dome_height, stem_wall, repose_deg, drawdown_deg, freeboard,
+        opening_w, opening_l, hoppers, tunnels,
+    )
+    hs, ts = opt["hopper_spacing"], opt["tunnel_spacing"]
+
+    sections = live_dead_storage(
+        diameter, dome_height, stem_wall, repose_deg, drawdown_deg, density,
+        density_unit, length_unit, freeboard, opening_w, opening_l, required_live,
+        hoppers, hs, tunnels, ts,
+    )
+
+    layout_rows = []
+    if hoppers > 1:
+        layout_rows.append(("Hopper Spacing (c-c)", hs, 1))
+    if tunnels > 1:
+        layout_rows.append(("Tunnel Spacing (c-c)", ts, 1))
+    if hoppers > 1:
+        layout_rows.append(("Extent Along Tunnel", (hoppers - 1) * hs + opening_w, 1))
+    if tunnels > 1:
+        layout_rows.append(("Extent Across Tunnels", (tunnels - 1) * ts + opening_l, 1))
+
+    if layout_rows:
+        # The spacings live in the Optimized Layout section; drop the
+        # duplicate rows live_dead_storage put in the Reclaim section.
+        for i, (title, rows) in enumerate(sections):
+            if title.startswith("Reclaim"):
+                sections[i] = (title, [row for row in rows if "Spacing (c-c)" not in row[0]])
+        sections.insert(1, ("Optimized Layout", layout_rows))
     return sections
